@@ -30,11 +30,14 @@ public class MessageController {
 	private final MessageRepository messageRepository;
 	private final UserRepository userRepository;
 	private final NotificationsRepository notificationsRepository;
-	private final HttpSession session;
 
 	// 特定の相手とのチャット画面を表示する
 	@GetMapping("/messages/chat/{talkToUserId}")
-	public String chatWithUser(@PathVariable("talkToUserId") Long talkToUserId, Model model, HttpServletResponse response) {
+	public String chatWithUser(
+			@PathVariable("talkToUserId") Long talkToUserId, 
+			Model model, 
+			HttpSession session,
+			HttpServletResponse response) {
 
 		response.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
 		response.setHeader("Pragma", "no-cache");
@@ -76,7 +79,8 @@ public class MessageController {
 	@PostMapping("/messages/send")
 	public String sendMessage(
 			@RequestParam("recipientId") Long recipientId,
-			@RequestParam("content") String content) {
+			@RequestParam("content") String content,
+			HttpSession session) {
 
 		User loginUser = (User) session.getAttribute("loginUser");
 		
@@ -109,24 +113,12 @@ public class MessageController {
 
 	// メッセージのやり取り相手毎に一覧を表示する
 	@GetMapping("/messages/list")
-	public String messageList(Model model, HttpServletResponse response) {
+	public String messageList(Model model, HttpServletResponse response, HttpSession session) {
 
 		// ブラウザにキャッシュを強制的に禁止させ、戻った時も必ずサーバーを叩かせる
 		response.setHeader("Cache-Control", "no-cache, no-store, must-relavidate"); // HTTP 1.1
 		response.setHeader("Pragma", "no-cache"); // HTTP 1.0
 		response.setDateHeader("Expires", 0); // Proxies
-
-		
-		// ==========================================
-		// 🛠【開発用ショートカット】自動ログイン処理
-		// ==========================================
-		if (session.getAttribute("loginUser") == null) {
-			// 例：import.sql でIDが「2」のサンプルユーザー（higakoなど）を強制的に取得
-			userRepository.findById(2L).ifPresent(devUser -> {
-				session.setAttribute("loginUser", devUser);
-			});
-		}
-		// ==========================================	
 
 		// 1. セッションからログインユーザーを取得
 		User loginUser = (User) session.getAttribute("loginUser");

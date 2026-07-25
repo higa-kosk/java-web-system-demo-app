@@ -66,18 +66,7 @@ public class BillController {
 		// ブラウザにキャッシュさせずに、チャット画面からブラウザで戻った時に必ずサーバーを叩かせる
 		response.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
 		response.setHeader("Pragma", "no-cache");
-		response.setDateHeader("Expires", 0);
-		
-		// ==========================================
-		// 🛠【開発用ショートカット】自動ログイン処理
-		// ==========================================
-		if (session.getAttribute("loginUser") == null) {
-			// 例：import.sql でIDが「2」のサンプルユーザー（higakoなど）を強制的に取得
-			userRepository.findById(2L).ifPresent(devUser -> {
-				session.setAttribute("loginUser", devUser);
-			});
-		}
-		// ==========================================		
+		response.setDateHeader("Expires", 0);	
 
 		// セッションからユーザー情報を取得
 		User sessionUser = (User) session.getAttribute("loginUser");
@@ -139,8 +128,6 @@ public class BillController {
 			// キーワードがなければ、今まで通り全件を最新順で取得
 			bills = billRepository.findAllByOrderByCreatedAtDesc();
 		}
-
-		model.addAttribute("bills", bills);
 
 		// 現在のタブの初期値をallにしておく
 		model.addAttribute("currentTab", "all");
@@ -212,7 +199,13 @@ public class BillController {
 
 	// 投稿を削除する
 	@PostMapping("/bills/{id}/delete")
-	public String deleteBill(@PathVariable("id") Long id) {
+	public String deleteBill(@PathVariable("id") Long id, HttpSession session) {
+
+		// ログインしているかチェック
+        User loginUser = (User) session.getAttribute("loginUser");
+        if (loginUser == null) {
+            return "redirect:/login";
+        }
 
 		// URLから受け取ったIDを使って、データベースから削除する
 		billRepository.deleteById(id);

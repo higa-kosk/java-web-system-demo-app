@@ -9,7 +9,6 @@ import lombok.RequiredArgsConstructor;
 import jakarta.servlet.http.HttpSession;
 import jakarta.servlet.http.HttpServletResponse;
 
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -21,7 +20,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import com.example.demo.model.User;
 import com.example.demo.repository.UserRepository;
-import com.example.demo.service.AvatarStorageService;
+import com.example.demo.service.UserService;
 
 import jakarta.validation.Valid; // バリデーション用1
 import org.springframework.validation.BindingResult; // バリデーション用2
@@ -30,296 +29,225 @@ import org.springframework.validation.BindingResult; // バリデーション用
 @RequiredArgsConstructor
 public class UserController {
 
-    private final UserRepository userRepository;
-    private final PasswordEncoder passwordEncoder;
-    private final AvatarStorageService avatarStorageService;
+	private final UserRepository userRepository;
+	private final UserService userService;
 
-    @GetMapping("/users")
-    public String showUserList(HttpSession session, Model model) {
+	@GetMapping("/users")
+	public String showUserList(HttpSession session, Model model) {
 
-        // セッションからログインユーザーを取得
-        User sessionUser = (User) session.getAttribute("loginUser");
+		// セッションからログインユーザーを取得
+		User sessionUser = (User) session.getAttribute("loginUser");
 
-        // フォロー中IDを格納する変数（未ログイン時は空っぽ）
-        Set<Long> followedUserIds = new HashSet<>();
+		// フォロー中IDを格納する変数（未ログイン時は空っぽ）
+		Set<Long> followedUserIds = new HashSet<>();
 
-        // ログインしている場合のみ、最新情報をDBから引き直して画面に渡す
-        if (sessionUser != null) {
+		// ログインしている場合のみ、最新情報をDBから引き直して画面に渡す
+		if (sessionUser != null) {
 
-            userRepository.findById(sessionUser.getId())
-                    .ifPresent(currentUser -> {
-                        model.addAttribute("loginUser", currentUser);
+			userRepository.findById(sessionUser.getId())
+					.ifPresent(currentUser -> {
+						model.addAttribute("loginUser", currentUser);
 
-                        // フォローしているユーザーのIDを抽出
-                        Set<Long> ids = currentUser.getFollowing().stream()
-                                .map(User::getId)
-                                .collect(Collectors.toSet());
-                        followedUserIds.addAll(ids);
-                    });
-        } else {
-            // 未ログインの場合は、明示的にnullを渡してHTML側が正しく判定できるようにする
-            model.addAttribute("loginUser", null);
-        }
+						// フォローしているユーザーのIDを抽出
+						Set<Long> ids = currentUser.getFollowing().stream()
+								.map(User::getId)
+								.collect(Collectors.toSet());
+						followedUserIds.addAll(ids);
+					});
+		} else {
+			// 未ログインの場合は、明示的にnullを渡してHTML側が正しく判定できるようにする
+			model.addAttribute("loginUser", null);
+		}
 
-        // 画面に表示するユーザー一覧を取得（ログイン有無に関係なく実行）
-        List<User> userList = userRepository.findAll();
+		// 画面に表示するユーザー一覧を取得（ログイン有無に関係なく実行）
+		List<User> userList = userRepository.findAll();
 
-        // 画面にデータを渡す
-        model.addAttribute("users", userList);
-        model.addAttribute("followedUserIds", followedUserIds); // HTML側で使用する
+		// 画面にデータを渡す
+		model.addAttribute("users", userList);
+		model.addAttribute("followedUserIds", followedUserIds); // HTML側で使用する
 
-        return "user_list"; // user_list.htmlを表示する
-    }
+		return "user_list"; // user_list.htmlを表示する
+	}
 
-    // 1. 登録フォーム画面を表示する（GETリクエスト）
-    @GetMapping("/users/new")
-    public String showCreationForm(Model model) {
-        // フォームと紐づけるための中身が空のUserオブジェクトを渡す
-        model.addAttribute("user", new User());
-        return "user_form";
-    }
+	// 1. 登録フォーム画面を表示する（GETリクエスト）
+	@GetMapping("/users/new")
+	public String showCreationForm(Model model) {
+		// フォームと紐づけるための中身が空のUserオブジェクトを渡す
+		model.addAttribute("user", new User());
+		return "user_form";
+	}
 
-    // 2. 新規登録用の保存窓口：フォームから送信されたデータを保存する（POSTリクエスト）
-    @PostMapping("/users/create")
-    public String createUser(
-            @Valid User user,
-            BindingResult bindingResult,
-            Model model) {
+	// 2. 新規登録用の保存窓口：フォームから送信されたデータを保存する（POSTリクエスト）
+	@PostMapping("/users/create")
+	public String createUser(@Valid User user, BindingResult bindingResult, Model model) {
 
-        // 入力チェックでおかしな点（エラー）が見つかったら、データをモデルに詰めて、フォーム画面に戻す
-        if (bindingResult.hasErrors()) {
-            model.addAttribute("user", user); // これを書いておくと、エラー内容と入力値を画面に引き継げる
-            return "user_form";
-        }
+		// 入力チェックでおかしな点（エラー）が見つかったら、データをモデルに詰めて、フォーム画面に戻す
+		if (bindingResult.hasErrors()) {
+			model.addAttribute("user", user); // これを書いておくと、エラー内容と入力値を画面に引き継げる
+			return "user_form";
+		}
 
-        // 防衛策：もし画面から意図しないIDが送られてきて、かつDBに既に存在していたらブロックする
-        if (user.getId() != null && userRepository.existsById(user.getId())) {
-            throw new IllegalStateException("エラー：新規登録ですが、既に存在するID（" + user.getId() + "）が指定されたため処理を中断しました");
-        }
+		userService.register(user);
 
-        // 画面から入力された生のパスワードを取得
-        String rawPassword = user.getPassword();
-        // パスワードをハッシュ化する
-        String hashedPassword = passwordEncoder.encode(rawPassword);
-        // ハッシュ化したパスワードをUserオブジェクトに再セットする
-        user.setPassword(hashedPassword);
+		// 保存が終わったら、ログイン画面にリダイレクトさせる
+		return "redirect:/login";
+	}
 
-        userRepository.save(user);
+	// 3. 編集・更新用の保存窓口
+	@PostMapping("/users/update")
+	public String updateUser(
+			@Valid User user,
+			BindingResult bindingResult,
+			@RequestParam(value = "avatarFile", required = false) MultipartFile avatarFile,
+			HttpSession session) {
 
-        // 保存が終わったら、ログイン画面にリダイレクトさせる
-        return "redirect:/login";
-    }
+		// 更新の時も同様にエラーがあればフォーム画面に戻す
+		if (bindingResult.hasErrors()) {
+			return "user_form";
+		}
 
-    // 3. 編集・更新用の保存窓口
-    @PostMapping("/users/update")
-    public String updateUser(
-            @Valid User user,
-            BindingResult bindingResult,
-            @RequestParam(value = "avatarFile", required = false) MultipartFile avatarFile,
-            HttpSession session) {
+		// 送信されてきたUserのidが、ログイン中のユーザーIDと一致するかチェック
+		User loginUser = (User) session.getAttribute("loginUser");
+		if (loginUser == null || !user.getId().equals(loginUser.getId())) {
+			return "redirect:/login";
+		}
 
-        // 更新の時も同様にエラーがあればフォーム画面に戻す
-        if (bindingResult.hasErrors()) {
-            return "user_form";
-        }
+		// 更新対象は「フォームから送られてきた新しいデータ（user）であるべき
+		User updatedUser = userService.updateProfile(user, avatarFile);
 
-        // 送信されてきたUserのidが、ログイン中のユーザーIDと一致するかチェック
-        User loginUser = (User) session.getAttribute("loginUser");
-        if (loginUser == null || !user.getId().equals(loginUser.getId())) {
-            return "redirect:/login";
-        }
+		// 保存後の最新状態（アバターURLも反映済み）をセッションに入れる
+		session.setAttribute("loginUser", updatedUser);
 
-        // 防御策：逆に、編集なのに「DBに存在しないID」だったら不正アクセスとして弾く
-        if (user.getId() == null || !userRepository.existsById(user.getId())) {
-            throw new IllegalArgumentException("エラー：存在しないユーザーの更新はできません。");
-        }
+		return "redirect:/users";
+	}
 
-        // --- アバター画像アップロード処理
-        if (avatarFile != null && !avatarFile.isEmpty()) {
-            try {
-                // 画像を保存してURLを取得
-                String avatarUrl = avatarStorageService.saveAvatar(avatarFile, user.getId());
-                // Userオブジェクトに画像URLをセットする（※UserモデルにavatarUrlフィールドがある前提）
-                user.setAvatarUrl(avatarUrl);
-            
-            } catch (Exception e) {
-                // エラーハンドリグ
-                throw new RuntimeException("アバター画像の保存に失敗しました", e);
-            }
-        } else {
-            User existingUser = userRepository.findById(user.getId()).orElse(null);
-            if (existingUser != null) {
-                user.setAvatarUrl(existingUser.getAvatarUrl());
-            }
-        }
+	// 4. 編集画面を表示する（URLの末尾にあるIDを @PathVariable で受け取る）
+	@GetMapping("/users/edit/{id}")
+	public String showEditForm(
+			@PathVariable("id") Long id,
+			HttpSession session,
+			Model model) {
 
-        userRepository.save(user);
+		// 現在ログインされているかチェック
+		User loginUser = (User) session.getAttribute("loginUser");
+		if (loginUser == null) {
+			return "redirect:/login"; // 未ログインならログイン画面へ
+		}
 
-        // セッション内のログインユーザー情報も最新に更新しておく
-        session.setAttribute("loginUser", user);
+		// 編集対象のID(id)と、ログインしている本人のID(loginUser.getId())が一致するかチェック
+		if (!id.equals(loginUser.getId())) {
+			// 本人じゃない場合はエラー画面に飛ばすか、一覧にリダイレクトさせる
+			return "redirect:/users";
+		}
 
-        return "redirect:/users";
-    }
+		// IDを元に、データベースから既存のユーザー情報を1件だけ取得
+		// 見つからなかった場合は例外を投げる（今回は簡易的に例外処理を記述）
+		User user = userRepository.findById(id)
+				.orElseThrow(() -> new IllegalArgumentException("Invalid user Id:" + id));
 
-    // 4. 編集画面を表示する（URLの末尾にあるIDを @PathVariable で受け取る）
-    @GetMapping("/users/edit/{id}")
-    public String showEditForm(
-            @PathVariable("id") Long id,
-            HttpSession session,
-            Model model) {
+		// 取得した「データが入っているUserオブジェクト」を画面に渡す
+		model.addAttribute("user", user);
 
-        // 現在ログインされているかチェック
-        User loginUser = (User) session.getAttribute("loginUser");
-        if (loginUser == null) {
-            return "redirect:/login"; // 未ログインならログイン画面へ
-        }
+		return "user_form"; // -> 新規登録で使ったフォーム（user_form.html）を再利用
+	}
 
-        // 編集対象のID(id)と、ログインしている本人のID(loginUser.getId())が一致するかチェック
-        if (!id.equals(loginUser.getId())) {
-            // 本人じゃない場合はエラー画面に飛ばすか、一覧にリダイレクトさせる
-            return "redirect:/users";
-        }
+	// 5. 削除用の窓口
+	@PostMapping("/users/delete/{id}")
+	public String deleteUser(@PathVariable("id") Long id, HttpSession session) {
 
-        // IDを元に、データベースから既存のユーザー情報を1件だけ取得
-        // 見つからなかった場合は例外を投げる（今回は簡易的に例外処理を記述）
-        User user = userRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Invalid user Id:" + id));
+		// ログインしているかチェック
+		User loginUser = (User) session.getAttribute("loginUser");
+		if (loginUser == null) {
+			return "redirect:/login";
+		}
 
-        // 取得した「データが入っているUserオブジェクト」を画面に渡す
-        model.addAttribute("user", user);
+		// 削除しようとしているIDが、ログイン中の自分自身のIDかチェック
+		if (!id.equals(loginUser.getId())) {
+			return "redirect:/users";
+		}
 
-        return "user_form"; // -> 新規登録で使ったフォーム（user_form.html）を再利用
-    }
+		userService.deleteUserCascade(id);
 
-    // 5. 削除用の窓口
-    @PostMapping("/users/delete/{id}")
-    public String deleteUser(@PathVariable("id") Long id, HttpSession session) {
+		// 自分のアカウントを削除したので、セッションをクリアしてログアウト状態にする
+		session.invalidate();
 
-        // ログインしているかチェック
-        User loginUser = (User) session.getAttribute("loginUser");
-        if (loginUser == null) {
-            return "redirect:/login";
-        }
+		// 削除が終わったら、ホーム（タイムライン画面）にリダイレクトさせる
+		return "redirect:/bills";
+	}
 
-        // 削除しようとしているIDが、ログイン中の自分自身のIDかチェック
-        if (!id.equals(loginUser.getId())) {
-            return "redirect:/users";
-        }
+	// ユーザーをフォローする窓口
+	@PostMapping("/users/{id}/follow")
+	public String followUser(
+			@PathVariable("id") Long id,
+			@RequestHeader(value = "Referer", required = false) String referer,
+			HttpSession session) {
 
-        // 安全対策：念のため、本当に存在するIDかどうかチェック
-        if (!userRepository.existsById(id)) {
-            throw new IllegalArgumentException("エラー：存在しないユーザーは削除できません（ID: " + id + "）");
-        }
+		// セッションからログインユーザーを取得してDBから最新状態を引き直す
+		User loginUser = (User) session.getAttribute("loginUser");
+		if (loginUser == null) {
+			return "redirect:/login";
+		}
 
-        // 自分の投稿に紐づいているハッシュタグの関係性を先に削除する
-        userRepository.deleteBillTagsByUserId(id);
+		User me = userService.follow(loginUser.getId(), id);
 
-        // SQLレベルで、自分に関するフォロー・被フォローの繋がりを両方とも一斉に削除する
-        userRepository.deleteFollowRelationsByUserId(id);
+		// MARK: save()の後、セッション内のユーザー情報も最新（フォロー追加後）に更新しておく
+		session.setAttribute("loginUser", me);
 
-        // 指定されたIDのユーザー本体を削除
-        userRepository.deleteById(id);
+		// 5. ボタンを押した元の画面にそのままリダイレクトで戻る
+		return referer != null ? "redirect:" + referer.replaceFirst("^https?://[^/]+", "") : "redirect:/bills";
+	}
 
-        // 自分のアカウントを削除したので、セッションをクリアしてログアウト状態にする
-        session.invalidate();
+	// ユーザーのフォローを解除する窓口
+	@PostMapping("/users/{id}/unfollow")
+	public String unfollowUser(
+			@PathVariable("id") Long id,
+			@RequestHeader(value = "Referer", required = false) String referer,
+			HttpSession session) {
 
-        // 削除が終わったら、ホーム（タイムライン画面）にリダイレクトさせる
-        return "redirect:/bills";
-    }
+		// セッションからログインユーザーを取得してDBから最新状態を引き直す
+		User loginUser = (User) session.getAttribute("loginUser");
+		if (loginUser == null) {
+			return "redirect:/login";
+		}
 
-    // ユーザーをフォローする窓口
-    @PostMapping("/users/{id}/follow")
-    public String followUser(
-            @PathVariable("id") Long id,
-            @RequestHeader(value = "Referer", required = false) String referer,
-            HttpSession session) {
+		User me = userService.unfollow(loginUser.getId(), id);
 
-        // セッションからログインユーザーを取得してDBから最新状態を引き直す
-        User loginUser = (User) session.getAttribute("loginUser");
-        if (loginUser == null) {
-            return "redirect:/login";
-        }
+		// MARK: save()の後、セッション内のユーザー情報も最新（フォロー解除後）に更新しておく
+		session.setAttribute("loginUser", me);
 
-        // 1. ログインユーザー（仮にID:2にする）を取得
-        User me = userRepository.findById(loginUser.getId())
-                .orElseThrow((() -> new IllegalArgumentException("自分のユーザーが見つかりません")));
+		return referer != null ? "redirect:" + referer.replaceFirst("^https?://[^/]+", "") : "redirect:/bills";
+	}
 
-        // 2. フォローしたい相手のユーザーを取得
-        User targetUser = userRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("フォロー対象のユーザーが見つかりません"));
+	@GetMapping("/users/{id}")
+	public String viewProfile(
+			@PathVariable("id") Long id,
+			HttpSession session,
+			Model model,
+			HttpServletResponse response) {
 
-        // 3. 自分自身の「following」セットに相手を追加する
-        me.follow(targetUser);
+		// 1. 「戻るボタン」対策：プロフィール画面もキャッシュさせない
+		response.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+		response.setHeader("Pragma", "no-cache");
+		response.setDateHeader("Expires", 0);
 
-        // 4. 状態を保存（中間テーブル user_follows にレコードが自動挿入される
-        userRepository.save(me);
+		// 2. sessyonkararoguモデルに渡す（既存のshowUserListと統一）
+		User sessionUser = (User) session.getAttribute("loginUser");
+		if (sessionUser != null) {
+			userRepository.findById(sessionUser.getId()).ifPresent(currentUser -> {
+				model.addAttribute("loginUser", currentUser);
+			});
+		} else {
+			// 未ログイン時はログイン画面に飛ばす
+			return "redirect:/login";
+		}
 
-        // MARK: save()の後、セッション内のユーザー情報も最新（フォロー追加後）に更新しておく
-        session.setAttribute("loginUser", me);
+		// 3. URLで指定されたIDのユーザー情報をDBから取得
+		User targetUser = userRepository.findById(id)
+				.orElseThrow(() -> new IllegalArgumentException("指定されたユーザーが見つかりません ID:" + id));
 
-        // 5. ボタンを押した元の画面にそのままリダイレクトで戻る
-        return referer != null ? "redirect:" + referer.replaceFirst("^https?://[^/]+", "") : "redirect:/bills";
-    }
+		// 表示対象のユーザー情報をモデルに詰める
+		model.addAttribute("targetUser", targetUser);
 
-    // ユーザーのフォローを解除する窓口
-    @PostMapping("/users/{id}/unfollow")
-    public String unfollowUser(
-            @PathVariable("id") Long id,
-            @RequestHeader(value = "Referer", required = false) String referer,
-            HttpSession session) {
-
-        // セッションからログインユーザーを取得してDBから最新状態を引き直す
-        User loginUser = (User) session.getAttribute("loginUser");
-        if (loginUser == null) {
-            return "redirect:/login";
-        }
-
-        User me = userRepository.findById(loginUser.getId())
-                .orElseThrow(() -> new IllegalArgumentException("自分のユーザーが見つかりません"));
-
-        User targetUser = userRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("フォロー解除対象のユーザーが見つかりません"));
-
-        me.unfollow(targetUser);
-
-        userRepository.save(me);
-
-        // MARK: save()の後、セッション内のユーザー情報も最新（フォロー解除後）に更新しておく
-        session.setAttribute("loginUser", me);
-
-        return referer != null ? "redirect:" + referer.replaceFirst("^https?://[^/]+", "") : "redirect:/bills";
-    }
-
-    @GetMapping("/users/{id}")
-    public String viewProfile(
-            @PathVariable("id") Long id,
-            HttpSession session,
-            Model model,
-            HttpServletResponse response) {
-
-        // 1. 「戻るボタン」対策：プロフィール画面もキャッシュさせない
-        response.setHeader("Cache-Control", "no-cache, no-store, muns-revalidate");
-        response.setHeader("Pragma", "no-cache");
-        response.setDateHeader("Expires", 0);
-
-        // 2. sessyonkararoguモデルに渡す（既存のshowUserListと統一）
-        User sessionUser = (User) session.getAttribute("loginUser");
-        if (sessionUser != null) {
-            userRepository.findById(sessionUser.getId()).ifPresent(currentUser -> {
-                model.addAttribute("loginUser", currentUser);
-            });
-        } else {
-            // 未ログイン時はログイン画面に飛ばす
-            return "refirect:/login";
-        }
-
-        // 3. URLで指定されたIDのユーザー情報をDBから取得
-        User targetUser = userRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("指定されたユーザーが見つかりません ID:" + id));
-
-        // 表示対象のユーザー情報をモデルに詰める
-        model.addAttribute("targetUser", targetUser);
-
-        return "profile";
-    }
+		return "profile";
+	}
 }
