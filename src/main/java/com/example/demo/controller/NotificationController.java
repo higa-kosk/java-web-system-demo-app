@@ -2,6 +2,7 @@ package com.example.demo.controller;
 
 import com.example.demo.model.Notification;
 import com.example.demo.model.BillNotification;
+import com.example.demo.service.NotificationService;
 import com.example.demo.model.User;
 import com.example.demo.repository.NotificationsRepository;
 import jakarta.servlet.http.HttpSession;
@@ -21,6 +22,7 @@ import java.util.List;
 public class NotificationController {
 
 	private final NotificationsRepository notificationsRepository;
+	private final NotificationService notificationService;
 
 	@GetMapping
 	public String showNotifications(HttpSession session, HttpServletResponse response, Model model) {
@@ -65,32 +67,6 @@ public class NotificationController {
 			return "redirect:/login";
 		}
 
-		// 対象の通知を取得
-		Notification notification = notificationsRepository.findById(id)
-				.orElseThrow(() -> new IllegalArgumentException("無効な通知IDです: " + id));
-
-		// 安全のため、ログインユーザー宛の通知である場合のみ既読にする
-		if (notification.getReceiver().getId().equals(loginUser.getId())) {
-			notification.setRead(true);
-			notificationsRepository.save(notification);
-		}
-
-		// 通知の型に応じて、本来の目的地へリダイレクトさせる
-		if (notification.isBillNotification()) {
-			// BillNotification型にキャストしてBillのIDを取得
-			BillNotification billNav = (BillNotification) notification;
-
-			if (billNav != null && billNav.getBill() != null) {
-				Long billId = billNav.getBill().getId();
-				return "redirect:/bills/" + billId;
-			} else {
-				return "redirect:/notifications";
-			}
-		} else if (notification.isMessageNotification()) {
-			// MessegaNotification型の場合は、送ってきた相手とのチャット画面へ
-			return "redirect:/messages/chat/" + notification.getSender().getId();
-		}
-
-		return "redirect:/bills"; // 念の為のフォールバック
+		return notificationService.markAsReadAndResolveRedirectPath(id, loginUser.getId());
 	}
 }
