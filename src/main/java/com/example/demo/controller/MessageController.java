@@ -13,11 +13,11 @@ import org.springframework.web.bind.annotation.RequestParam;
 
 import com.example.demo.model.Message;
 import com.example.demo.model.MessageNotification;
-import com.example.demo.model.Notification;
 import com.example.demo.model.User;
 import com.example.demo.repository.MessageRepository;
 import com.example.demo.repository.NotificationsRepository;
 import com.example.demo.repository.UserRepository;
+import com.example.demo.service.MessageService;
 
 import jakarta.servlet.http.HttpSession;
 import jakarta.servlet.http.HttpServletResponse;
@@ -30,6 +30,7 @@ public class MessageController {
 	private final MessageRepository messageRepository;
 	private final UserRepository userRepository;
 	private final NotificationsRepository notificationsRepository;
+	private final MessageService messageService;
 
 	// 特定の相手とのチャット画面を表示する
 	@GetMapping("/messages/chat/{talkToUserId}")
@@ -55,14 +56,8 @@ public class MessageController {
 		User talkToUser = userRepository.findById(talkToUserId)
 				.orElseThrow(() -> new IllegalArgumentException("無効なユーザーIDです:" + talkToUserId));
 
-		// 実態リスト（List）を取得して一括既読更新を行う
-		List<Notification> unreadNotifications = notificationsRepository.findUnreadMessageNotificationsFromPartner(loginUser, talkToUser);
-		if (!unreadNotifications.isEmpty()) {
-			for (Notification n : unreadNotifications) {
-				n.setRead(true);
-			}
-			notificationsRepository.saveAll(unreadNotifications);
-		}
+		// 2-1. 相手ユーザーからの通知を既読に変更する（処理内容はMessageServiceで定義）
+		messageService.markChatAsRead(loginUser, talkToUser);
 		
 		// 3. テストで実証済みの「findChatHistory」を使って、二人の間のメッセージ履歴を取得
 		List<Message> chatHistory = messageRepository.findChatHistory(loginUser.getId(), talkToUser.getId());
@@ -77,35 +72,17 @@ public class MessageController {
 
 	// メッセージを送信する（保存処理）
 	@PostMapping("/messages/send")
-	public String sendMessage(
-			@RequestParam("recipientId") Long recipientId,
+	public String sendMessage(@RequestParam("recipientId") Long recipientId,
 			@RequestParam("content") String content,
 			HttpSession session) {
 
 		User loginUser = (User) session.getAttribute("loginUser");
-		
 		if (loginUser == null) {
 			return "redirect:/login";
 		}
 
-		User recipient = userRepository.findById(recipientId)
-				.orElseThrow(() -> new IllegalArgumentException("無効な受信者IDです:" + recipientId));
-
-		// 1. メッセージオブジェクトを作成して保存
-		Message message = new Message();
-		message.setSender(loginUser);
-		message.setRecipient(recipient);
-		message.setContent(content);
-
-		messageRepository.save(message);
-
-		// 2. 通知機能：メッセージ受信通知を裏で作成して保存する
-		MessageNotification notification = new MessageNotification();
-		notification.setSender(loginUser);
-		notification.setReceiver(recipient);
-		notification.setRead(false);
-
-		notificationsRepository.save(notification);
+		// メッセージ送信＋通知作成
+		messageService.sendMessage(loginUser, recipientId, content);
 
 		// 送信後は、元のチャット画面にリダイレクト（再読み込み）する
 		return "redirect:/messages/chat/" + recipientId;
@@ -126,34 +103,10 @@ public class MessageController {
 			return "redirect:/login";
 		}
 
-		// 2. つながりのあるユーザー一覧をDBから取得
-		// ※本来はMessageRepositoryに専用クエリを書くのがきれいだが、まずは全ユーザーからチャット履歴がある人を抽出する
-		List<User> allUsers = userRepository.findAll();
-		// 相手ユーザー毎の「最新メッセージ」を格納するマップ（表示順保持のためLinkedHashMap）
-		Map<User, Message> chatPartnersMap = new LinkedHashMap<>();
-		// 相手ユーザー毎の「未読メッセージ通知数」を格納するマップ
-		Map<User, Long> unreadCountsMap = new LinkedHashMap<>();
-
-		for (User user : allUsers) {
-			if (user.getId().equals(loginUser.getId())) {
-				continue; // 自分自身はスキップ
-			}
-
-			// 二人の間のチャット履歴を取得
-			List<Message> history = messageRepository.findChatHistory(loginUser.getId(), user.getId());
-
-			if (!history.isEmpty()) {
-				// 最新のメッセージ（リストの最後）を取得
-				Message latestMessage = history.get(history.size() - 1);
-				chatPartnersMap.put(user, latestMessage);
-
-				// この相手から自分宛の「未読メッセージ通知」の数をカウント
-				// (TYPE(n) = MessageNotification かつ sender = user かつ receiver = loginUser かつ isRead = false)
-				// ここでは簡易的に、リポジトリでカウントするか、後述のリポジトリ修正で対応する
-				long unreadCount = notificationsRepository.countUnreadMessageNotificationsFromPartner(loginUser, user);
-				unreadCountsMap.put(user, unreadCount);
-			}
-		}
+		// 2. つながりのあるユーザー+メッセージ一覧をDBから取得
+		Map<User, Message> chatPartnersMap = messageService.findLatestMessagesByPartner(loginUser);
+		// チャット相手毎の未読メッセージ通知数を、1回のクエリでまとめて取得する
+		Map<User, Long> unreadCountsMap = messageService.countUnreadByPartner(loginUser, chatPartnersMap);
 
 		// 3. 画面にデータを渡す
 		model.addAttribute("loginUser", loginUser);

@@ -13,7 +13,9 @@ public class NotificationService {
 	
 	private final NotificationsRepository notificationsRepository;
 
-	// 通知を既読化し、遷移先のパスを決定して返す
+	/**
+	 * 通知を既読化し、遷移先のパスを決定して返す
+	 */
 	@Transactional
 	public String markAsReadAndResolveRedirectPath(Long notificationId, Long loginUserId) {
 		Notification notification = notificationsRepository.findById(notificationId)

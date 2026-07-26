@@ -23,10 +23,10 @@ public interface VoteRepository extends JpaRepository<Vote, Long> {
     boolean existsByUserAndBill(User user, Bill bill);
 
     // 複数のBillIdに対して、Bill単位の投票数をまとめて集計する（N+1解消用）
-    @Query("SELECT v.bill.id AS billId, COUNT(v) AS cont " +
+    @Query("SELECT v.bill.id AS billId, COUNT(v) AS cnt " +
             "FROM Vote v WHERE v.bill.id IN :billIds " +
             "GROUP BY v.bill.id")
-    List<BillCount> countByBillIdIn(@Param("billIds") Collection<Long> billIdLongs);
+    List<BillCount> countByBillIdIn(@Param("billIds") Collection<Long> billIds);
 
     // 指定ユーザーが「Vote」済みのBillIdの集合だけをまとめて取得する（N+1解消用）
     @Query("SELECT v.bill.id FROM Vote v " +

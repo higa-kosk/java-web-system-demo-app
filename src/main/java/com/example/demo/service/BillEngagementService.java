@@ -34,8 +34,10 @@ public class BillEngagementService {
 		}
 	}
 
-	// リストのBillそれぞれにいいね数・投票数・自分の状態を付与する（一覧画面用）
-	// BillIdのリストに対してまとめて集計クエリを発行することでN+1を解消している
+	/**
+	 * リストのBillそれぞれにいいね数・投票数・自分の状態を付与する（一覧画面用）
+	 * BillIdのリストに対してまとめて集計クエリを発行することでN+1を解消している
+	 */
 	public void attachEngagementInfo(List<Bill> bills, User currentUser) {
 		if (bills.isEmpty()) {
 			return;

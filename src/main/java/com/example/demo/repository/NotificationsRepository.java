@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 
 public interface NotificationsRepository extends JpaRepository<Notification, Long> {
@@ -26,4 +27,21 @@ public interface NotificationsRepository extends JpaRepository<Notification, Lon
     // チャット画面用：特定の相手から自分宛の未読メッセージ通知の「実態リスト」を取得する（既読更新用）
     @Query("SELECT n FROM Notification n WHERE n.receiver = :receiver AND n.sender = :sender AND n.isRead = false AND TYPE(n) = MessageNotification")
     List<Notification> findUnreadMessageNotificationsFromPartner(@Param("receiver") User receiver, @Param("sender") User sender);
+
+    // 自分宛の未読メッセージ通知を、送信者（相手）毎に纏めて件数集計する（N+1解消用）
+    @Query("SELECT n.sender.id AS senderId, COUNT(n) AS cnt " +
+            "FROM Notification n " +
+            "WHERE n.receiver = :receiver AND n.sender.id IN :senderIsd " +
+            "AND n.isRead = false AND TYPE(n) = MessageNotification " +
+            "GROUP BY n.sender.id")
+    List<SenderCount> countUnreadMessageNotificationsGroupedBySender(
+            @Param("receiver") User receiver,
+            @Param("senderIds") Collection<Long> senderIds
+    );
+
+    // 集計結果（送信者IDと件数のペア）を受け取るためのプロジェクションインターフェース
+    interface SenderCount {
+        Long getSenderId();
+        Long getCnt();
+    }
 }

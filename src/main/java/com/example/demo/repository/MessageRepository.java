@@ -17,4 +17,10 @@ public interface MessageRepository extends JpaRepository<Message, Long> {
 		"(m.sender.id = :user2Id AND m.recipient.id = :user1Id) " +
 		"ORDER BY m.createdAt ASC")
 		List<Message> findChatHistory(@Param("user1Id") Long user1Id, @Param("user2Id") Long user2Id);
+
+	// ログインユーザーが送信者 or 受信者になっている全メッセージを、新しい順で1回のクエリで取得する
+	@Query("SELECT m FROM Message m " +
+			"WHERE m.sender.id = :userId OR m.recipient.id = :userId " +
+			"ORDER BY m.createdAt DESC")
+	List<Message> findAllInvolvingUserOrderByCreatedAtDesc(@Param("userId") Long userId);
 }
