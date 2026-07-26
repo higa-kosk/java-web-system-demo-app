@@ -38,6 +38,7 @@ import com.example.demo.repository.VoteRepository;
 import com.example.demo.repository.NotificationsRepository;
 import com.example.demo.repository.CommitteeRepository;
 import com.example.demo.service.AmendmentService;
+import com.example.demo.service.BillEngagementService;
 import com.example.demo.service.BillService;
 
 @Controller
@@ -54,6 +55,7 @@ public class BillController {
 	private final CommitteeRepository committeeRepository;
 	private final BillService billService;
 	private final AmendmentService amendmentService;
+	private final BillEngagementService billEngagementService;
 
 	// 投稿一覧を表示する窓口
 	@GetMapping("/bills")
@@ -70,57 +72,15 @@ public class BillController {
 
 		// セッションからユーザー情報を取得
 		User sessionUser = (User) session.getAttribute("loginUser");
+		User currentUser = null;
 
-		// ログインしている場合のみ、最新のユーザー情報をDBから取得してモデルに渡す
 		if (sessionUser != null) {
-			userRepository.findById(sessionUser.getId())
-					.ifPresent(currentUser -> {
-						model.addAttribute("loginUser", currentUser);
-
-						// 全体に表示する投稿一覧を取得（これはログイン有無に関係なく実行）
-						List<Bill> bills;
-
-						if (keyword != null && !keyword.trim().isEmpty()) {
-							bills = billRepository.findByTitleContainingIgnoreCaseOrderByCreatedAtDesc(keyword);
-							model.addAttribute("keyword", keyword); // 画面にキーワードを保持させる
-						} else {
-							// キーワードがなければ、今まで通り全件を最新順で取得
-							bills = billRepository.findAllByOrderByCreatedAtDesc();
-						}
-
-						// Vote-2: 各投稿にいいね数と、Vote数及び自分がVoteしたかの情報を付与する
-						for (Bill bill : bills) {
-
-							// 1-1. 総いいね数をカウントしてセット
-							bill.setLikeCount(likeRepository.countByBill(bill));
-
-							// 1-2. ログイン中の場合、自分がいいねしたかを判定してセット
-							if (currentUser != null) {
-								bill.setLikedByMe(likeRepository.existsByUserAndBill(currentUser, bill));
-							} else {
-								bill.setLikedByMe(false); // 念のためユーザーがいない場合は一律false
-							}
-
-							// 総Vote数をカウントしてセット
-							bill.setVoteCount(voteRepository.countByBill(bill));
-
-							// ログイン中の場合、自分がVoteしたかを判定してセット
-							if (currentUser != null) {
-								bill.setVotedByMe(voteRepository.existsByUserAndBill(currentUser, bill));
-							} else {
-								bill.setVotedByMe(false); // 念のためユーザーがいない場合は一律false
-							}
-						}
-						model.addAttribute("bills", bills);
-					});
-		} else {
-			// 未ログインの場合は、画面側で制御できるように null を明示するか、ログイン状態をfalseにする
-			model.addAttribute("loginUser", null);
+			currentUser = userRepository.findById(sessionUser.getId()).orElseGet(null);
 		}
+		model.addAttribute("loginUser", currentUser);
 
 		// 全体に表示する投稿一覧を取得（これはログイン有無に関係なく実行）
 		List<Bill> bills;
-
 		if (keyword != null && !keyword.trim().isEmpty()) {
 			bills = billRepository.findByTitleContainingIgnoreCaseOrderByCreatedAtDesc(keyword);
 			model.addAttribute("keyword", keyword); // 画面にキーワードを保持させる
@@ -128,6 +88,10 @@ public class BillController {
 			// キーワードがなければ、今まで通り全件を最新順で取得
 			bills = billRepository.findAllByOrderByCreatedAtDesc();
 		}
+
+		billEngagementService.attachEngagementInfo(bills, currentUser);
+
+		model.addAttribute("bills", bills);
 
 		// 現在のタブの初期値をallにしておく
 		model.addAttribute("currentTab", "all");
@@ -380,61 +344,21 @@ public class BillController {
 		User me = userRepository.findById(sessionUser.getId())
 			.orElseThrow(() -> new IllegalArgumentException("ユーザーが見つかりません"));
 
-		// 2. どの投稿に対するコメントか、親を取得
-		Bill bill = billRepository.findById(id)
-				.orElseThrow(() -> new IllegalArgumentException("法案が見つかりません"));
-
-		// バリデーションエラー（空欄や文字数超過）がある場合の処理
+		// もしフォームに不備がある場合は、表示に必要な情報を注入して法案詳細画面を表示する
 		if (bindingResult.hasErrors()) {
-			// 詳細画面を再表示するために、billDetailと同じデータを詰め直す
-			bill.setLikeCount(likeRepository.countByBill(bill));
-			bill.setVoteCount(voteRepository.countByBill(bill));
-			bill.setLikedByMe(likeRepository.existsByUserAndBill(me, bill));
-			bill.setVotedByMe(voteRepository.existsByUserAndBill(me, bill));
+			Bill bill = billRepository.findById(id)
+					.orElseThrow(() -> new IllegalArgumentException("法案が見つかりません"));
+			billEngagementService.attachEngagementInfo(bill, me);
 
 			model.addAttribute("bill", bill);
 			model.addAttribute("loginUser", me);
 			model.addAttribute("trends", tagRepository.findTop5Trends());
 
-			return "bill_detail"; // リダイレクトではなく、エラーを持ったまま詳細画面のHTMLを表示
+			return "bill_detail";
 		}
 
-		// 3. コメントオブジェクトを生成してデータをセット
-		Comment comment = new Comment();
-		comment.setContent(commentForm.getContent()); // フォームから値を取得
-		comment.setBill(bill);
-		comment.setUser(me); // 最新のユーザーオブジェクトを紐づける
-		comment.setQuestion(commentForm.isQuestion()); // 質疑通告フラグ
-
-		// 返信（答弁）の場合の処理
-		if (commentForm.getParentId() != null) {
-			Comment parentComment = commentRepository.findById(commentForm.getParentId())
-				.orElse(null);
-
-			if (parentComment != null) {
-				comment.setParent(parentComment);
-
-				// 提案者自身が質疑に返信（答弁）した場合は、親コメントを「答弁済み」にする
-				if (parentComment.isQuestion() && bill.getUser().getId().equals(me.getId())) {
-					parentComment.setAnswered(true);
-					commentRepository.save(parentComment);
-				}
-			}
-		}
-
-		// 4. データベースに保存
-		commentRepository.save(comment);
-
-		// 5. 通知機能：自作自演（自分の提案に自分でコメント）でなければ、提案者宛にコメント通知を作成して保存
-		if (!bill.getUser().getId().equals(me.getId())) {
-			BillNotification notification = new BillNotification();
-			notification.setType(BillNotification.BillNotificationType.COMMENT);
-			notification.setSender(me);
-			notification.setReceiver(bill.getUser());
-			notification.setBill(bill);
-
-			notificationsRepository.save(notification);
-		}
+		// フォームに不備が無ければ、BillServiceでコメント投稿（保存等）処理を行う
+		billService.postComment(id, me, commentForm);
 
 		// 6. 書き込みが終わったら、元の詳細画面にリダイレクトで戻る
 		return "redirect:/bills/" + id;

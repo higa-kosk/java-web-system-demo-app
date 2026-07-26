@@ -1,9 +1,16 @@
 package com.example.demo.service;
 
+import com.example.demo.form.CommentForm;
 import com.example.demo.model.Bill;
+import com.example.demo.model.BillNotification;
 import com.example.demo.model.Tag;
 import com.example.demo.repository.BillRepository;
 import com.example.demo.repository.TagRepository;
+import com.example.demo.model.Comment;
+import com.example.demo.model.User;
+import com.example.demo.repository.BillRepository;
+import com.example.demo.repository.CommentRepository;
+import com.example.demo.repository.NotificationsRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,13 +26,15 @@ public class BillService {
 	
 	private final BillRepository billRepository;
 	private final TagRepository tagRepository;
+	private final CommentRepository commentRepository;
+	private final NotificationsRepository notificationsRepository;
 
 	/**
 	 * 法案を作成・保存し、本文（description）からハッシュタグを抽出して中間テーブルにも保存する
 	 */
 	@Transactional
 	public Bill createBill(Bill bill) {
-		// 本文からハッシュタグを抽出してエンティティにセット
+		// 後述のハッシュタグ抽出・紐づけメソッドを実行後、エンティティにセット
 		extractAndAttachTags(bill);
 
 		return billRepository.save(bill);
@@ -64,5 +73,46 @@ public class BillService {
 
 		// 抽出したタグのリストをセット（これで、カスケード等により中間テーブルへ保存される）
 		bill.getTags().addAll(tagList);
+	}
+
+	/**
+	 * コメント作成、返信時の答弁済みフラグ更新、通知作成を1トランザクションでまとめる
+	 */
+	@Transactional
+	public Comment postComment(Long billId, User author, CommentForm form) {
+		Bill bill = billRepository.findById(billId)
+				.orElseThrow(() -> new IllegalArgumentException("法案が見つかりません"));
+
+		Comment comment = new Comment();
+		comment.setContent(form.getContent());
+		comment.setBill(bill);
+		comment.setUser(author);
+		comment.setQuestion(form.isQuestion());
+
+		if (form.getParentId() != null) {
+			commentRepository.findById(form.getParentId()).ifPresent(parentComment -> {
+				comment.setParent(parentComment);
+
+				// て案者自身が質疑に返信（答弁）した場合は、親コメントを「答弁済み」にする
+				if (parentComment.isQuestion() && bill.getUser().getId().equals(author.getId())) {
+					parentComment.setAnswered(true);
+					commentRepository.save(parentComment);
+				}
+			});
+		}
+
+		commentRepository.save(comment);
+
+		// 自作自演（自分の提案に自分でコメント）でなければ、提案者宛に通知を作成
+		if (!bill.getUser().getId().equals(author.getId())) {
+			BillNotification notification = new BillNotification();
+			notification.setType(BillNotification.BillNotificationType.COMMENT);
+			notification.setSender(author);
+			notification.setReceiver(bill.getUser());
+			notification.setBill(bill);
+			notificationsRepository.save(notification);
+		}
+
+		return comment;
 	}
 }
