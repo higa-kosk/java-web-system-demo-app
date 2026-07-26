@@ -4,7 +4,6 @@ import com.example.demo.form.AmendmentForm;
 import com.example.demo.model.Amendment;
 import com.example.demo.model.Bill;
 import com.example.demo.model.BillNotification;
-import com.example.demo.model.Notification;
 import com.example.demo.model.User;
 import com.example.demo.repository.AmendmentRepository;
 import com.example.demo.repository.BillRepository;
@@ -27,7 +26,7 @@ public class AmendmentService {
 	 * 修正案を新規作成し、法案の原案者に通知を送信する
 	 */
 	@Transactional
-	public Amendment createAmendment(AmendmentForm form, User currenUser) {
+	public Amendment createAmendment(AmendmentForm form, User currentUser) {
 		// 1. 対象の法案を取得
 		Bill bill = billRepository.findById(form.getBillId())
 				.orElseThrow(() -> new IllegalArgumentException("無効な法案IDです： " + form.getBillId()));
@@ -37,15 +36,15 @@ public class AmendmentService {
 		amendment.setTitle(form.getTitle());
 		amendment.setDescription(form.getDescription());
 		amendment.setBill(bill);
-		amendment.setUser(currenUser);
+		amendment.setUser(currentUser);
 
 		Amendment savedAmendment = amendmentRepository.save(amendment);
 
 		// 3. 原案作成者（自分以外の場合）に通知を作成
-		if (!bill.getUser().getId().equals(currenUser.getId())) {
+		if (!bill.getUser().getId().equals(currentUser.getId())) {
 			BillNotification notification = new BillNotification();
 			notification.setReceiver(bill.getUser()); // 通知先
-			notification.setSender(currenUser); // 通知元
+			notification.setSender(currentUser); // 通知元
 			notification.setType(BillNotification.BillNotificationType.AMENDMENT);
 			notification.setBill(bill);
 			notification.setRead(false);

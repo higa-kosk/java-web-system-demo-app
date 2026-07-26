@@ -31,7 +31,7 @@ public interface NotificationsRepository extends JpaRepository<Notification, Lon
     // 自分宛の未読メッセージ通知を、送信者（相手）毎に纏めて件数集計する（N+1解消用）
     @Query("SELECT n.sender.id AS senderId, COUNT(n) AS cnt " +
             "FROM Notification n " +
-            "WHERE n.receiver = :receiver AND n.sender.id IN :senderIsd " +
+            "WHERE n.receiver = :receiver AND n.sender.id IN :senderIds " +
             "AND n.isRead = false AND TYPE(n) = MessageNotification " +
             "GROUP BY n.sender.id")
     List<SenderCount> countUnreadMessageNotificationsGroupedBySender(
