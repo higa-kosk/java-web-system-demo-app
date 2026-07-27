@@ -1,0 +1,22 @@
+# ==========================================
+# 本番環境設定（MySQL）
+# ==========================================
+
+spring.datasource.url=jdbc:mysql://localhost:3306/kijoin?useSSL=false&serverTimezone=Asia/Tokyo&characterEncoding=UTF-8&allowPublicKeyRetrieval=true
+spring.datasource.username=root
+spring.datasource.password=${DB_PASSWORD}
+spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
+
+# 本番はスキーマの差分だけ反映し、既存データを保持する
+# （本番テスト環境でも、意図せずデータが消えるのを防ぐためcreateは使わない）
+spring.jpa.hibernate.ddl-auto=update
+
+spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.MySQLDialect
+
+# 本番ではH2コンソールを無効にする（明示しておくと安全）
+spring.h2.console.enabled=false
+
+# 本番ではライブリロード不要
+spring.devtools.livereload.enabled=false
+
+debug=false

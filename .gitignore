@@ -34,3 +34,5 @@ build/
 
 ### Other ###
 application.properties
+application-*.properties
+!application-*.properties.example
