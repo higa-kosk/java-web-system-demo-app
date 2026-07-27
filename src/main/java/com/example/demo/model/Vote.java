@@ -7,7 +7,7 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "votes", uniqueConstraints = {
-    // 同じユーザーが同じ投稿に「2回以上Voteできない」様に制約をかける
+    // 同じユーザーが同じ法案に「2回以上Voteできない」様に制約をかける（賛否の変更はUPDATEで対応）
     @UniqueConstraint(columnNames = {"user_id", "bill_id"})
 })
 @Getter
@@ -27,6 +27,11 @@ public class Vote {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "bill_id", nullable = false)
     private Bill bill;
+
+    // 賛成／反対の区別
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 10)
+    private VoteChoice choice;
 
     // いつ投票したか
     @Column(name = "created_at", nullable = false)

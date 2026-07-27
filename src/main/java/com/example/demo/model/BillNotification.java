@@ -11,9 +11,11 @@ import lombok.Setter;
 @Setter
 public class BillNotification extends Notification {
 	
-	// 投稿への通知特有のEnum
+	// 法案への通知特有のEnum
 	public enum BillNotificationType {
-		LIKE, VOTE, COMMENT, AMENDMENT
+		LIKE, VOTE, COMMENT, AMENDMENT,
+		AMENDMENT_APPROVED,	// 自分が提出した修正案が承認された
+		AMENDMENT_REJECTED	// 自分が提出した修正案が却下された
 	}
 
 	@Enumerated(EnumType.STRING)
