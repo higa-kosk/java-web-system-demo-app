@@ -122,16 +122,12 @@ public class Bill {
     @Transient
     private boolean likedByMe; // 自分がいいねしているか
 
-    // Vote（投票）を一時的に取り扱う為の記述
-    @Transient // DBのカラムには作らない、画面表示用の一時的なフィールド
-    private long voteCount;
-
-    @Transient // 現在ログインしているユーザーが、この法案に「賛成 or 反対」しているかどうかのフラグ
-    private boolean votedByMe;
-
     @Transient
     private long yeaCount; // 賛成票の数（画面で「賛成：〇票」と出力する用）
     
     @Transient
     private long nayCount; // 反対票の数（画面で「反対：〇票」と出力する用）
+
+    @Transient
+    private VoteChoice myChoice;
 }

@@ -2,6 +2,7 @@ package com.example.demo.service;
 
 import com.example.demo.model.Bill;
 import com.example.demo.model.User;
+import com.example.demo.model.VoteChoice;
 import com.example.demo.repository.LikeRepository;
 import com.example.demo.repository.VoteRepository;
 import lombok.RequiredArgsConstructor;
@@ -23,14 +24,21 @@ public class BillEngagementService {
 	// 単体のBillにいいね数・投票数・自分の状態を付与する
 	public void attachEngagementInfo(Bill bill, User currentUser) {
 		bill.setLikeCount(likeRepository.countByBill(bill));
-		bill.setVoteCount(voteRepository.countByBill(bill));
+
+		// 賛成/反対それぞれの件数を付与する
+		bill.setYeaCount(voteRepository.countByBillAndChoice(bill, VoteChoice.YEA));
+		bill.setNayCount(voteRepository.countByBillAndChoice(bill, VoteChoice.NAY));
 
 		if (currentUser != null) {
 			bill.setLikedByMe(likeRepository.existsByUserAndBill(currentUser, bill));
-			bill.setVotedByMe(voteRepository.existsByUserAndBill(currentUser, bill));
+
+			// 自分がどちらに投票したかを付与する
+			bill.setMyChoice(voteRepository.findChoiceByUserIdAndBillId(currentUser.getId(), bill.getId()).orElse(null));
 		} else {
 			bill.setLikedByMe(false);
-			bill.setVotedByMe(false);
+
+			// 未ログイン時はnull（未投票扱い）
+			bill.setMyChoice(null);
 		}
 	}
 
@@ -52,23 +60,30 @@ public class BillEngagementService {
 				.collect(Collectors.toMap(LikeRepository.BillCount::getBillId, LikeRepository.BillCount::getCnt));
 
 		// 投票数をBillIdごとのMapに変換（SQLは1回）
-		Map<Long, Long> voteCounts = voteRepository.countByBillIdIn((billIds)).stream()
+		Map<Long, Long> yeaCounts = voteRepository.countByBillIdInAndChoice(billIds, VoteChoice.YEA).stream()
 				.collect(Collectors.toMap(VoteRepository.BillCount::getBillId, VoteRepository.BillCount::getCnt));
+		
+		Map<Long, Long> nayCounts = voteRepository.countByBillIdInAndChoice(billIds, VoteChoice.NAY).stream()
+		.collect(Collectors.toMap(VoteRepository.BillCount::getBillId, VoteRepository.BillCount::getCnt));
 		
 		// 自分がいいね・投票したBillIdの集合（ログイン時のみ、それぞれSQL1回）
 		Set<Long> likedByMeIds = currentUser != null
 			? new HashSet<>(likeRepository.findLikedBillIdsByUser(currentUser.getId(), billIds))
 			: Set.of();
-		Set<Long> votedByMeIds = currentUser != null
-			? new HashSet<>(voteRepository.findVotedBillIdsByUser(currentUser.getId(), billIds))
-			: Set.of();
 
 		// ここから先はメモリ上の処理のみ（追加のSQLは発行されない）
 		for (Bill bill : bills) {
 			bill.setLikeCount(likeCounts.getOrDefault(bill.getId(), 0L));
-			bill.setVoteCount(voteCounts.getOrDefault(bill.getId(), 0L));
+			bill.setYeaCount(yeaCounts.getOrDefault(bill.getId(), 0L));
+			bill.setNayCount(nayCounts.getOrDefault(bill.getId(), 0L));
+
+			if (currentUser != null) {
+				bill.setMyChoice(voteRepository.findChoiceByUserIdAndBillId(currentUser.getId(), bill.getId()).orElse(null));
+			} else {
+				bill.setMyChoice(null);
+			}
+
 			bill.setLikedByMe(likedByMeIds.contains(bill.getId()));
-			bill.setVotedByMe(votedByMeIds.contains(bill.getId()));
 		}
 	}
 }

@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+
+<head>
+    <meta charset="UTF-8">
+    <title th:text="${targetUser != null} ? '👤 ' + ${targetUser.name} + ' の投稿一覧' : '👤 ユーザーの投稿一覧'"></title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+</head>
+
+<body class="centered-layout">
+    <div class="container">
+
+        <div th:replace="~{header :: common-header(~{})}"></div>
+
+        <main id="main-content">
+            <h2 th:text="${targetUser != null} ? '👤 ' + ${targetUser.name} + ' の投稿一覧' : '👤 ユーザーの投稿一覧'"></h2>
+
+            <div th:if="${loginUser != null && loginUser.id != targetUser.id}" class="follow-wrapper">
+
+                <form th:if="${loginUser.following.contains(targetUser)}"
+                    th:action="@{/users/{id}/unfollow(id=${targetUser.id})}" method="post">
+                    <button type="submit" class="follow">
+                        🤝 フォロー中 (解除する)
+                    </button>
+                </form>
+
+                <form th:unless="${loginUser.following.contains(targetUser)}"
+                    th:action="@{/users/{id}/follow(id=${targetUser.id})}" method="post">
+                    <button type="submit" class="unfollow">
+                        ➕ フォローする
+                    </button>
+                </form>
+            </div>
+
+            <div th:if="${#lists.isEmpty(bills)}" class="empty-message">
+                まだ投稿がありません
+            </div>
+
+
+            <div th:each="bill : ${bills}" class="post-card">
+                <div class="post-header">
+                    <span class="user-name">
+                        <div class="user-avatar-area">
+                            <div class="user-avatar">
+                                <img th:if="${bill.user != null && bill.user.avatarUrl != null}"
+                                    th:src="${bill.user.avatarUrl}" alt="icon">
+                                <span th:if="${bill.user == null || bill.user.avatarUrl == null}">👤</span>
+                            </div>
+                            <a th:href="@{/users/{id}(id=${bill.user.id})}" th:text="${bill.user.name}"></a>
+                        </div>
+                    </span>
+                    <span class="user-id" th:text="'(ID: ' + ${bill.user.id} + ')'"></span>
+                    <span class="post-time"
+                        th:text="${#temporals.format(bill.createdAt, 'yyyy/MM/dd（E）HH:mm:ss')}"></span>
+                </div>
+
+                <div class="post-content-container">
+                    <a th:href="@{/bills/{id}(id=${bill.id})}" class="whole-text-anchor"></a>
+                    <div class="post-content-text">
+                        <h3 th:text="${bill.title}" class="bill-title"></h3>
+                        <p th:text="${bill.description}" class="bill-description"></p>
+                    </div>
+                </div>
+
+                <div class="post-actions">
+                    <button type="button" class="like-button" th:data-post-id="${post.id}"
+                        th:classappend="${bill.likedByMe} ? 'liked' : ''">
+                        <span class="like-icon" th:text="${bill.likedByMe} ? '❤️' : '🖤'">🖤</span>
+                        <span class="like-count" th:text="${bill.likeCount}">0</span>
+                    </button>
+
+                    <div class="vote-group">
+                        <button type="button" class="vote-button yea" th:data-bill-id="${bill.id}" data-choice="YEA"
+                            th:data-is-own="${loginUser != null && bill.user.id == loginUser.id}"
+                            th:classappend="${bill.myChoice != null && bill.myChoice.name() == 'YEA'} ? 'voted' : ''">
+                            <span class="vote-icon">👍</span>
+                            <span class="vote-count" th:text="${bill.yeaCount}">0</span>
+                        </button>
+                        <button type="button" class="vote-button nay" th:data-bill-id="${bill.id}" data-choice="NAY"
+                            th:data-is-own="${loginUser != null && bill.user.id == loginUser.id}"
+                            th:classappend="${bill.myChoice != null && bill.myChoice.name() == 'NAY'} ? 'voted' : ''">
+                            <span class="vote-icon">👎</span>
+                            <span class="vote-count" th:text="${bill.nayCount}">0</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+    </div>
+
+    <div id="toast-container"></div>
+
+    <script th:src="@{/js/global.js}"></script>
+</body>
+
+</html>

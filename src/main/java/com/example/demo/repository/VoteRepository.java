@@ -23,6 +23,9 @@ public interface VoteRepository extends JpaRepository<Vote, Long> {
 	// 特定のユーザーがすでにVoteしているかどうかの判定用
 	boolean existsByUserAndBill(User user, Bill bill);
 
+	// 単体のBillに対する賛成/反対別の件数（API応答用、都度1件のBillだけ集計すればよい場面）
+	long countByBillAndChoice(Bill bill, VoteChoice choice);
+
 	// 複数のBillIdに対して、Bill単位の投票数をまとめて集計する（N+1解消用）
 	@Query("SELECT v.bill.id AS billId, COUNT(v) AS cnt " +
 			"FROM Vote v WHERE v.bill.id IN :billIds " +
@@ -35,7 +38,7 @@ public interface VoteRepository extends JpaRepository<Vote, Long> {
 	List<Long> findVotedBillIdsByUser(@Param("userId") Long userId, @Param("billIds") Collection<Long> billIds);
 
 	// 賛成のみ／反対の身を区別してBill単位で集計する（yeaCount/nayCount用、採決判定用）
-	@Query("SELECT v.bill.id AS billIb, COUNT(v) AS cnt " +
+	@Query("SELECT v.bill.id AS billId, COUNT(v) AS cnt " +
 			"FROM Vote v WHERE v.bill.id IN :billIds AND v.choice = :choice " +
 			"GROUP BY v.bill.id")
 	List<BillCount> countByBillIdInAndChoice(
@@ -51,7 +54,7 @@ public interface VoteRepository extends JpaRepository<Vote, Long> {
 	// 「誰が」「どのBillに」「どちらに」投票したかの3つ組を全部取得する
 	@Query("SELECT v.user.id AS userId, v.bill.id AS billId, v.choice AS choice " +
 			"FROM Vote v WHERE v.bill.id IN :billIds")
-	List<VoteRecord> findVoteRecordsByBillIds(@Param("billids") Collection<Long> billIds);
+	List<VoteRecord> findVoteRecordsByBillIds(@Param("billIds") Collection<Long> billIds);
 
 	// 集計結果（BillIdと件数のペア）を受け取るためのプロジェクションインターフェース
 	interface BillCount {

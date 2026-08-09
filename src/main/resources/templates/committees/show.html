@@ -41,7 +41,7 @@
 				<!-- 法案一覧リスト（タイムラインと完全同一の post-card 構造に統一） -->
 				<div class="timeline-list" th:unless="${#lists.isEmpty(bills)}">
 					<div th:each="bill : ${bills}" class="post-card no-shadow">
-						
+
 						<!-- ヘッダー（ユーザー名・ID・ステータスバッジ・投稿日時） -->
 						<div class="post-header">
 							<span class="user-name">
@@ -57,8 +57,7 @@
 							<span class="user-id" th:text="'(ID: ' + ${bill.user.id} + ')'"></span>
 
 							<!-- ステータスバッジ -->
-							<span th:text="${bill.status.displayName}" class="status-badge"
-								th:classappend="(
+							<span th:text="${bill.status.displayName}" class="status-badge" th:classappend="(
 									${bill.status.name() == 'UNDER_DELIBERATION'} 
 									? 'under-deliberation'
 									: (
@@ -90,12 +89,22 @@
 								<span class="like-count" th:text="${bill.likeCount}">0</span>
 							</button>
 
-							<button type="button" class="vote-button" th:data-bill-id="${bill.id}"
-								th:data-is-own="${loginUser != null && bill.user.id == loginUser.id}"
-								th:classappend="${bill.votedByMe} ? 'voted' : ''">
-								<span class="vote-icon" th:text="${bill.votedByMe} ? '★' : '☆'">☆</span>
-								<span class="vote-count" th:text="${bill.voteCount}">0</span>
-							</button>
+							<div class="vote-group">
+								<button type="button" class="vote-button yea" th:data-bill-id="${bill.id}"
+									data-choice="YEA"
+									th:data-is-own="${loginUser != null && bill.user.id == loginUser.id}"
+									th:classappend="${bill.myChoice != null && bill.myChoice.name() == 'YEA'} ? 'voted' : ''">
+									<span class="vote-icon">👍</span>
+									<span class="vote-count" th:text="${bill.yeaCount}">0</span>
+								</button>
+								<button type="button" class="vote-button nay" th:data-bill-id="${bill.id}"
+									data-choice="NAY"
+									th:data-is-own="${loginUser != null && bill.user.id == loginUser.id}"
+									th:classappend="${bill.myChoice != null && bill.myChoice.name() == 'NAY'} ? 'voted' : ''">
+									<span class="vote-icon">👎</span>
+									<span class="vote-count" th:text="${bill.nayCount}">0</span>
+								</button>
+							</div>
 						</div>
 
 					</div>

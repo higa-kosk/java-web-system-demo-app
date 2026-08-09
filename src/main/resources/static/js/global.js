@@ -84,27 +84,31 @@ document.addEventListener("DOMContentLoaded", function () {
 			}
 
 			const billId = btn.getAttribute('data-bill-id');
+			const choice = btn.getAttribute('data-choice'); // "YEA" または "NAY"
+			const actionsArea = btn.closest('.post-actions');
 			btn.disabled = true;
 
 			try {
 				const response = await fetch(`/api/bills/${billId}/vote`, {
-					method: 'POST'
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ choice: choice })
 				});
 
 				if (response.ok) {
-					const result = await response.json();
-					const icon = btn.querySelector('.vote-icon');
-					const countSpan = btn.querySelector('.vote-count');
+					const result = await response.json(); // { myChoice, yeaCount, nayCount }
 
-					countSpan.textContent = result.voteCount;
+					const yeaBtn = actionsArea.querySelector('.vote-button.yea');
+					const nayBtn = actionsArea.querySelector('.vote-button.nay');
 
-					if (result.voted) {
-						icon.textContent = '★';
-						btn.classList.add('voted');
-					} else {
-						icon.textContent = '☆';
-						btn.classList.remove('voted');
-					}
+					yeaBtn.querySelector('.vote-count').textContent = result.yeaCount;
+					nayBtn.querySelector('.vote-count').textContent = result.nayCount;
+
+					yeaBtn.classList.toggle('voted', result.myChoice === 'YEA');
+					nayBtn.classList.toggle('voted', result.myChoice === 'NAY');
+				} else {
+					const message = await response.text();
+					showWarningToast(message || '投票に失敗しました');
 				}
 			} catch (error) {
 				console.error('Voteの非同期通信に失敗しました:', error);

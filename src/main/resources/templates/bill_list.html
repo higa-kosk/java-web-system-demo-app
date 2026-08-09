@@ -88,12 +88,22 @@
 						<span class="like-count" th:text="${bill.likeCount}">0</span>
 					</button>
 
-					<button type="button" class="vote-button" th:data-bill-id="${bill.id}"
-						th:data-is-own="${loginUser != null && bill.user.id == loginUser.id}"
-						th:classappend="${bill.votedByMe} ? 'voted' : ''">
-						<span class="vote-icon" th:text="${bill.votedByMe} ? '★' : '☆'">☆</span>
-						<span class="vote-count" th:text="${bill.voteCount}">0</span>
-					</button>
+					<div class="vote-group">
+						<button type="button" class="vote-button yea" th:data-bill-id="${bill.id}"
+							th:data-choice="YEA"
+							th:data-is-own="${loginUser != null && bill.user.id == loginUser.id}"
+							th:classappend="${bill.myChoice != null && bill.myChoice.name() == 'YEA'} ? 'voted' : ''">
+							<span class="vote-icon">👍</span>
+							<span class="vote-count" th:text="${bill.yeaCount}">0</span>
+						</button>
+						<button type="button" class="vote-button nay" th:data-bill-id="${bill.id}"
+							th:data-choice="NAY"
+							th:data-is-own="${loginUser != null && bill.user.id == loginUser.id}"
+							th:classappend="${bill.myChoice != null && bill.myChoice.name() == 'NAY'} ? 'voted' : ''">
+							<span class="vote-icon">👎</span>
+							<span class="vote-count" th:text="${bill.nayCount}">0</span>
+						</button>
+					</div>
 				</div>
 
 				<form th:action="@{/bills/{id}/delete(id=${bill.id})}" method="post" style="margin: 0;">

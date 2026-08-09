@@ -5,9 +5,9 @@ import com.example.demo.model.Bill;
 import com.example.demo.model.User;
 import com.example.demo.repository.CommitteeRepository;
 import com.example.demo.repository.BillRepository;
-import com.example.demo.repository.TagRepository;
 import com.example.demo.repository.UserRepository;
 import com.example.demo.service.BillEngagementService;
+import com.example.demo.service.TagService;
 
 import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
@@ -26,9 +26,9 @@ public class CommitteeController {
 	
 	private final CommitteeRepository committeeRepository;
 	private final BillRepository billRepository;
-	private final TagRepository tagRepository;
 	private final UserRepository userRepository;
 	private final BillEngagementService billEngagementService;
+	private final TagService tagService;
 
 	// 委員会一覧（案内画面）を表示
 	@GetMapping
@@ -37,7 +37,7 @@ public class CommitteeController {
 		model.addAttribute("committees",committees);
 
 		// サイドバー用のトレンド等
-		model.addAttribute("trends", tagRepository.findTop5Trends());
+		model.addAttribute("trends", tagService.getTop5Trends());
 
 		return "committees/index";
 	}
@@ -66,7 +66,7 @@ public class CommitteeController {
 		// 4. モデルへのデータ格納
 		model.addAttribute("committee", committee);
 		model.addAttribute("bills", bills);
-		model.addAttribute("trends", tagRepository.findTop5Trends());
+		model.addAttribute("trends", tagService.getTop5Trends());
 
 		return "committees/show";
 	}

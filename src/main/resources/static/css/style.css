@@ -500,6 +500,33 @@ form:has(.delete-btn) {
     align-items: center;
 }
 
+.vote-group {
+    display: flex;
+    gap: 8px;
+}
+
+.vote-button.yea.voted {
+    color: #38a169 !important;
+    background: rgba(56, 161, 105, 0.2) !important;
+    border-color: #38a169 !important;
+}
+
+.vote-button.nay.voted {
+    color: #e53e3e !important;
+    background: rgba(229, 62, 98, 0.2) !important;
+    border-color: #e53e3e !important;
+}
+
+.vote-button.yea:hover {
+    background: rgba(56, 161, 105, 0.15);
+    border-color: rgba(56, 161, 105, 0.4);
+}
+
+.vote-button.nay:hover {
+    background: rgba(229, 62, 98, 0.15);
+    border-color: rgba(229, 62, 98, 0.4);
+}
+
 /* ==========================================
    💬 各画面固有の独立パーツ
    ========================================== */

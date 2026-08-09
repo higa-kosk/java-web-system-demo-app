@@ -40,6 +40,7 @@ import com.example.demo.repository.CommitteeRepository;
 import com.example.demo.service.AmendmentService;
 import com.example.demo.service.BillEngagementService;
 import com.example.demo.service.BillService;
+import com.example.demo.service.TagService;
 
 @Controller
 @RequiredArgsConstructor // これを書くことでconstructor(this.xx = xx)を書かなくて済む
@@ -53,9 +54,10 @@ public class BillController {
 	private final VoteRepository voteRepository;
 	private final NotificationsRepository notificationsRepository;
 	private final CommitteeRepository committeeRepository;
-	private final BillService billService;
 	private final AmendmentService amendmentService;
+	private final BillService billService;
 	private final BillEngagementService billEngagementService;
+	private final TagService tagService;
 
 	// 投稿一覧を表示する窓口
 	@GetMapping("/bills")
@@ -97,7 +99,7 @@ public class BillController {
 		model.addAttribute("currentTab", "all");
 
 		// トレンド上位5件を画面に渡す
-		model.addAttribute("trends", tagRepository.findTop5Trends());
+		model.addAttribute("trends", tagService.getTop5Trends());
 
 		return "bill_list";
 	}
@@ -189,34 +191,13 @@ public class BillController {
 
 		// 2. セッションからユーザー情報を取得
 		User sessionUser = (User) session.getAttribute("loginUser");
-
-		// タイムラインと同じ構造：ログインしている場合のみ最新のユーザー情報をDBから取得してモデルに渡す
+		User currentUser = null;
 		if (sessionUser != null) {
-
-			userRepository.findById(sessionUser.getId())
-				.ifPresent(currentUser -> {
-					model.addAttribute("loginUser", currentUser);
-
-					// 各投稿にいいね・Vote情報を付与
-					for (Bill bill : bills) {
-						bill.setLikeCount(likeRepository.countByBill(bill));
-						bill.setLikedByMe(likeRepository.existsByUserAndBill(currentUser, bill));
-
-						bill.setVoteCount(voteRepository.countByBill(bill));
-						bill.setVotedByMe(voteRepository.existsByUserAndBill(currentUser, bill));
-					}
-				});
-		} else {
-
-			// 未ログインの場合はnullを明示し、投稿の自分のアクションフラグを一律falseにする
-			model.addAttribute("loginUser", null);
-			for (Bill bill : bills) {
-				bill.setLikeCount(likeRepository.countByBill(bill));
-				bill.setLikedByMe(false);
-				bill.setVoteCount(voteRepository.countByBill(bill));
-				bill.setVotedByMe(false);
-			}
+			currentUser = userRepository.findById(sessionUser.getId()).orElse(null);
 		}
+		model.addAttribute("loginUser", currentUser);
+
+		billEngagementService.attachEngagementInfo(bills, currentUser);
 
 		// 2. 画面のタイトル等に表示するために、そのユーザーの名前も取得（任意）
 		if (!bills.isEmpty()) {
@@ -263,7 +244,7 @@ public class BillController {
 		model.addAttribute("currentTab", "following"); // 今どっちのタブにいるかを判定するためのフラグ
 
 		// トレンド上位5件を画面に渡す
-		model.addAttribute("trends", tagRepository.findTop5Trends());
+		model.addAttribute("trends", tagService.getTop5Trends());
 
 		return "bill_list"; // 画面は新しく作らず、既存の bill_list.html を使いまわす。
 	}
@@ -286,23 +267,19 @@ public class BillController {
 			currentUser = userRepository.findById(sessionUser.getId()).orElse(null);
 		}
 
-		// 取得した1件の投稿にいいね数と投票数の情報を詰め込む
-		bill.setLikeCount(likeRepository.countByBill(bill));
-		bill.setVoteCount(voteRepository.countByBill(bill));
+		// 単体のBillに、いいね・賛否投票の情報をまとめて付与する
+		billEngagementService.attachEngagementInfo(bill, currentUser);
+		model.addAttribute("loginUser", currentUser);
+		
+		// 「承認済み」の修正案一覧（誰でも見られる、投票対象の物）
+		List<Amendment> approvedAmendments = amendmentService.getApprovedAmendmentsByBillId(id);
+		model.addAttribute("amendments", approvedAmendments);
 
-		if (currentUser != null) {
-			bill.setLikedByMe(likeRepository.existsByUserAndBill(currentUser, bill));
-			bill.setVotedByMe(voteRepository.existsByUserAndBill(currentUser, bill));
-			model.addAttribute("loginUser", currentUser); // 常に最新のユーザーを渡す
-		} else {
-			bill.setLikedByMe(false);
-			bill.setVotedByMe(false);
-			model.addAttribute("loginUser", null);
+		// 法案提出者にだけ「承認待ち」の修正案一覧を渡す
+		if (currentUser != null && bill.getUser().getId().equals(currentUser.getId())) {
+			List<Amendment> pendingAmendments = amendmentService.getPendingAmendmentsByBillId(id);
+			model.addAttribute("pendingAmendments", pendingAmendments);
 		}
-
-		// 法案に紐づく修正案一覧を追加
-		List<Amendment> amendments = amendmentService.getAmendmentsByBillId(id);
-		model.addAttribute("amendments", amendments);
 
 		// 修正案投稿フォーム用の空オブジェクトを追加
 		if (!model.containsAttribute("amendmentForm")) {
@@ -319,7 +296,7 @@ public class BillController {
 		// HTMLのth:object="{commentForm}"を受け止める為に空のオブジェクトを必ず渡す
 		model.addAttribute("commentForm", new CommentForm());
 
-		model.addAttribute("trends", tagRepository.findTop5Trends());
+		model.addAttribute("trends", tagService.getTop5Trends());
 
 		return "bill_detail";
 	}
@@ -350,9 +327,15 @@ public class BillController {
 					.orElseThrow(() -> new IllegalArgumentException("法案が見つかりません"));
 			billEngagementService.attachEngagementInfo(bill, me);
 
+			// エラー時もamendmentsが必要（bill_detail.htmlの#lists.size(amendments)の為）
+			model.addAttribute("amendments", amendmentService.getApprovedAmendmentsByBillId(id));
+			if (bill.getUser().getId().equals(me.getId())) {
+				model.addAttribute("pendingAmendments", amendmentService.getPendingAmendmentsByBillId(id));
+			}
+
 			model.addAttribute("bill", bill);
 			model.addAttribute("loginUser", me);
-			model.addAttribute("trends", tagRepository.findTop5Trends());
+			model.addAttribute("trends", tagService.getTop5Trends());
 
 			return "bill_detail";
 		}
@@ -379,7 +362,7 @@ public class BillController {
 		// 4. 新しい画面を作らず、既存の「bill_list.html」をそのまま使いまわす
 
 		// 割り込み：トレンド上位5件を画面に渡す
-		model.addAttribute("trends", tagRepository.findTop5Trends());
+		model.addAttribute("trends", tagService.getTop5Trends());
 
 		return "bill_list";
 	}
