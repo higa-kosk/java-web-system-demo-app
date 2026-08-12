@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import com.example.demo.model.Comment;
 import com.example.demo.form.CommentForm;
@@ -165,18 +166,24 @@ public class BillController {
 
 	// 投稿を削除する
 	@PostMapping("/bills/{id}/delete")
-	public String deleteBill(@PathVariable("id") Long id, HttpSession session) {
+	public String deleteBill(@PathVariable("id") Long billId, HttpSession session, RedirectAttributes redirectAttributes) {
 
 		// ログインしているかチェック
-        User loginUser = (User) session.getAttribute("loginUser");
-        if (loginUser == null) {
+        User currentUser = (User) session.getAttribute("loginUser");
+        if (currentUser == null) {
             return "redirect:/login";
         }
 
-		// URLから受け取ったIDを使って、データベースから削除する
-		billRepository.deleteById(id);
+		try {
+			billService.deleteBill(billId, currentUser);
 
-		return "redirect:/bills";
+			return "redirect:/bills";
+
+		} catch (IllegalStateException e) {
+
+			redirectAttributes.addFlashAttribute("amendmentError", e.getMessage());
+			return "redirect:/bills";
+		}
 	}
 
 	// 特定のユーザーの投稿一覧を表示するルート

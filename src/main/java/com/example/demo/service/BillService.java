@@ -1,8 +1,11 @@
 package com.example.demo.service;
 
 import com.example.demo.form.CommentForm;
+import com.example.demo.model.Amendment;
+import com.example.demo.model.Amendment.AmendmentStatus;
 import com.example.demo.model.Bill;
 import com.example.demo.model.BillNotification;
+import com.example.demo.model.BillNotification.BillNotificationType;
 import com.example.demo.model.Tag;
 import com.example.demo.repository.BillRepository;
 import com.example.demo.repository.TagRepository;
@@ -11,6 +14,7 @@ import com.example.demo.model.User;
 import com.example.demo.repository.BillRepository;
 import com.example.demo.repository.CommentRepository;
 import com.example.demo.repository.NotificationsRepository;
+import com.example.demo.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,11 +27,12 @@ import java.util.regex.Pattern;
 @Service
 @RequiredArgsConstructor
 public class BillService {
-	
+
 	private final BillRepository billRepository;
 	private final TagRepository tagRepository;
 	private final CommentRepository commentRepository;
 	private final NotificationsRepository notificationsRepository;
+	private final UserRepository userRepository;
 
 	/**
 	 * 法案を作成・保存し、本文（description）からハッシュタグを抽出して中間テーブルにも保存する
@@ -61,16 +66,15 @@ public class BillService {
 						.orElseGet(() -> {
 							Tag newTag = new Tag();
 							newTag.setName(tagName);
-							
+
 							return tagRepository.save(newTag);
 						});
-				
+
 				if (!tagList.contains(tag)) {
 					tagList.add(tag);
 				}
 			}
 		}
-
 		// 抽出したタグのリストをセット（これで、カスケード等により中間テーブルへ保存される）
 		bill.getTags().addAll(tagList);
 	}
@@ -114,5 +118,25 @@ public class BillService {
 		}
 
 		return comment;
+	}
+
+	/**
+	 * 提案した法案の削除（撤回）
+	 */
+	@Transactional
+	public void deleteBill(Long billId, User currentUser) {
+
+		// 自分自身の投稿かを分岐して、URLから受け取ったIDを使って、データベースから削除する
+		Bill bill = billRepository.findById(billId)
+				.orElseThrow(() -> new IllegalArgumentException("修正案が見つかりません: " + billId));
+
+		User me = userRepository.findById(currentUser.getId())
+				.orElseThrow(() -> new IllegalArgumentException("ユーザーが見つかりません: " + currentUser));
+
+		if (!bill.getUser().getId().equals(me.getId())) {
+			throw new IllegalStateException("自分自身の提案のみ撤回ができます。");
+		} else {
+			billRepository.deleteById(bill.getId());
+		}
 	}
 }

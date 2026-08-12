@@ -119,6 +119,28 @@ document.addEventListener("DOMContentLoaded", function () {
 	});
 
 	// =====================
+	// 削除ボタンの処理
+	// =====================
+	document.querySelectorAll('.delete-form').forEach(form => {
+		form.addEventListener('submit', (e) => {
+			const isOwn = e.currentTarget.getAttribute('data-is-own');
+
+			// 自分以外の投稿なら削除させずにトーストを出して終了
+			if (isOwn === 'false') {
+				e.preventDefault();
+				showWarningToast('自身の提出法案のみ「削除」する事ができます');
+				return;
+			} 
+			
+			const result = confirm('本当にこの投稿を削除しますか？')
+			
+			if (!result) {
+				e.preventDefault();
+			}
+		});
+	});
+
+	// =====================
 	// SP時：画面最下部付近でボトムバーを下に隠す処理
 	// =====================
 	const sidebar = document.getElementById('sidebar');

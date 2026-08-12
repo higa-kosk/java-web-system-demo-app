@@ -862,6 +862,7 @@ form:has(.delete-btn) {
     bottom: 20px;
     left: 50%;
     transform: translateX(-50%);
+    width: max-content;
     z-index: 1000;
 }
 

@@ -106,8 +106,8 @@
 					</div>
 				</div>
 
-				<form th:action="@{/bills/{id}/delete(id=${bill.id})}" method="post" style="margin: 0;">
-					<button type="submit" class="delete-btn" onclick="return confirm('本当にこの投稿を削除しますか？')">
+				<form class="delete-form" th:action="@{/bills/{id}/delete(id=${bill.id})}" method="post" style="margin: 0;" th:data-is-own="${loginUser != null && bill.user.id == loginUser.id}">
+					<button type="submit" class="delete-btn">
 						🗑️ 削除
 					</button>
 				</form>
