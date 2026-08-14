@@ -30,6 +30,9 @@ public interface AmendmentVoteRepository extends JpaRepository<AmendmentVote, Lo
 	@Query("SELECT av.choice FROM AmendmentVote av WHERE av.user.id = :userId AND av.amendment.id = :amendmentId")
 	Optional<VoteChoice> findChoiceByUserIdAndAmendmentId(@Param("userId") Long userId, @Param("amendmentId") Long amendmentId);
 
+	// Amendment単位で、賛成/反対別にカウント
+	long countByAmendmentAndChoice(Amendment amendment, VoteChoice choice);
+
 	// クラスタリング用：誰が・どのAmendmentに・どちらに投票したか
 	@Query("SELECT av.user.id AS userId, av.amendment.id AS amendmentId, av.choice AS choice " +
 			"FROM AmendmentVote av WHERE av.amendment.id IN :amendmentIds")

@@ -59,7 +59,7 @@ public class VoteService {
 	// 修正案（Amendment）への投票
 	// 承認済みの修正案のみ投票対象とする（承認待ち・却下されたものには投票させない）
 	@Transactional
-	public void voteOnAmendment(Long amendmentId, Long userId, VoteChoice choice) {
+	public VoteResult voteOnAmendment(Long amendmentId, Long userId, VoteChoice choice) {
 		Amendment amendment = amendmentRepository.findById(amendmentId)
 				.orElseThrow(() -> new IllegalArgumentException("修正案が見つかりません" + amendmentId));
 
@@ -70,11 +70,32 @@ public class VoteService {
 		User user = userRepository.findById(userId)
 				.orElseThrow(() -> new IllegalArgumentException("ユーザーがみつかりません: " + userId));
 
-		AmendmentVote vote = amendmentVoteRepository.findByUserAndAmendment(user, amendment).orElseGet(AmendmentVote::new);
+		// 修正案の提出者自身は投票できない
+		if (amendment.getUser().getId().equals(userId)) {
+			throw new IllegalStateException("自分の投稿にはアクションできません。");
+		}
+		Optional<AmendmentVote> existing = amendmentVoteRepository.findByUserAndAmendment(user, amendment);
+
+		VoteChoice myChoice;
+
+		if (existing.isPresent() && existing.get().getChoice() == choice) {
+			// 同じ選択肢を再度クリック -> 投票を取り消す
+			amendmentVoteRepository.delete(existing.get());
+			myChoice = null;
+		} else {
+			// 未投票、または異なる選択肢からの変更 -> 保存（新規 or 上書き）
+		AmendmentVote vote = existing.orElseGet(AmendmentVote::new);
 		vote.setUser(user);
 		vote.setAmendment(amendment);
 		vote.setChoice(choice);
 		amendmentVoteRepository.save(vote);
+		myChoice = choice;
+		}
+
+		long yeaCount = amendmentVoteRepository.countByAmendmentAndChoice(amendment, VoteChoice.YEA);
+		long nayCount = amendmentVoteRepository.countByAmendmentAndChoice(amendment, VoteChoice.NAY);
+
+		return new VoteResult(myChoice, yeaCount, nayCount);
 	}
 
 	// API応答用のシンプルな結果オブジェクト

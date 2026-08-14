@@ -23,7 +23,7 @@ import java.util.Optional;
 @RestController
 @RequestMapping("/api/bills/{id}/like") // 分かりやすく /api/を頭につけたURLにする
 @RequiredArgsConstructor
-public class LikeApiController {
+public class LikeController {
     
 	private final BillRepository billRepository;
 	private final LikeRepository likeRepository;

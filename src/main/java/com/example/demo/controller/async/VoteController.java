@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/bills/{billId}/vote")
 @RequiredArgsConstructor
-public class VoteApiController {
+public class VoteController {
     
     private final VoteService voteService;
 

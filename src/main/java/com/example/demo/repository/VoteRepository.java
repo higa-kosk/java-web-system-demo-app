@@ -17,12 +17,6 @@ public interface VoteRepository extends JpaRepository<Vote, Long> {
 	// 特定のユーザーが、特定の提案にすでにVoteしているかを探す
 	Optional<Vote> findByUserAndBill(User user, Bill bill);
 
-	// 提案毎に、いくつのVote（投票）がついているかを集計する
-	long countByBill(Bill bill);
-
-	// 特定のユーザーがすでにVoteしているかどうかの判定用
-	boolean existsByUserAndBill(User user, Bill bill);
-
 	// 単体のBillに対する賛成/反対別の件数（API応答用、都度1件のBillだけ集計すればよい場面）
 	long countByBillAndChoice(Bill bill, VoteChoice choice);
 
