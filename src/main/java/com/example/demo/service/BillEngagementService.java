@@ -1,8 +1,10 @@
 package com.example.demo.service;
 
+import com.example.demo.model.Amendment;
 import com.example.demo.model.Bill;
 import com.example.demo.model.User;
 import com.example.demo.model.VoteChoice;
+import com.example.demo.repository.AmendmentVoteRepository;
 import com.example.demo.repository.LikeRepository;
 import com.example.demo.repository.VoteRepository;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +20,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class BillEngagementService {
 	
+	private final AmendmentVoteRepository amendmentVoteRepository;
 	private final LikeRepository likeRepository;
 	private final VoteRepository voteRepository;
 
@@ -84,6 +87,53 @@ public class BillEngagementService {
 			}
 
 			bill.setLikedByMe(likedByMeIds.contains(bill.getId()));
+		}
+	}
+
+	/**
+	 * 単体のAmendmentに投票数・自分の状態を付与する
+	 */
+	public void attachAmendmentEngagementInfo(Amendment amendment, User currentUser) {
+		amendment.setYeaCount(amendmentVoteRepository.countByAmendmentAndChoice(amendment, VoteChoice.YEA));
+		amendment.setNayCount(amendmentVoteRepository.countByAmendmentAndChoice(amendment, VoteChoice.NAY));
+
+		if (currentUser != null) {
+			amendment.setMyChoice(amendmentVoteRepository.findChoiceByUserIdAndAmendmentId(currentUser.getId(), amendment.getId()).orElse(null));
+		} else {
+			amendment.setMyChoice(null);
+		}
+	}
+
+	/**
+	 * リストのAmendmentそれぞれに投票数・自分の状態を付与する（詳細画面用）
+	 * AmendmentIdのリストに対してまとめて集計クエリを発行することでN+1を解消している
+	 */
+	public void attachAmendmentEngagementInfo(List<Amendment> amendments, User currentUser) {
+		if (amendments.isEmpty()) {
+			return;
+		}
+
+		List<Long> amendmentIds = amendments.stream()
+				.map(Amendment::getId)
+				.toList();
+
+		// 投票数をAmendmentId毎のMapに変換（SQLは1回）
+		Map<Long, Long> yeaCounts = amendmentVoteRepository.countByAmendmentIdInAndChoice(amendmentIds, VoteChoice.YEA).stream()
+				.collect(Collectors.toMap(AmendmentVoteRepository.AmendmentCount::getAmendmentId, AmendmentVoteRepository.AmendmentCount::getCnt));
+		
+		Map<Long, Long> nayCounts = amendmentVoteRepository.countByAmendmentIdInAndChoice(amendmentIds, VoteChoice.NAY).stream()
+				.collect(Collectors.toMap(AmendmentVoteRepository.AmendmentCount::getAmendmentId, AmendmentVoteRepository.AmendmentCount::getCnt));
+
+		// ここから先はメモリ上の処理のみ（追加のSQLは発行されない）
+		for (Amendment amendment : amendments) {
+			amendment.setYeaCount(yeaCounts.getOrDefault(amendment.getId(), 0L));
+			amendment.setNayCount(nayCounts.getOrDefault(amendment.getId(), 0L));
+
+			if (currentUser != null) {
+				amendment.setMyChoice(amendmentVoteRepository.findChoiceByUserIdAndAmendmentId(currentUser.getId(), amendment.getId()).orElse(null));
+			} else {
+				amendment.setMyChoice(null);
+			}
 		}
 	}
 }

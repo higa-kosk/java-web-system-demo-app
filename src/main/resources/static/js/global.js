@@ -77,13 +77,18 @@ document.addEventListener("DOMContentLoaded", function () {
 		button.addEventListener('click', async (e) => {
 			const btn = e.currentTarget;
 
+			// Bill投票ボタン出ない場合は処理しない
+			const billId = btn.getAttribute('data-bill-id');
+			if (!billId) {
+				return;
+			}
+
 			// 自分の投稿なら通信させずにトーストを出して終了
 			if (btn.getAttribute('data-is-own') === 'true') {
 				showWarningToast('🏛️ 自身の提出法案に「投票」することはできません');
 				return;
 			}
 
-			const billId = btn.getAttribute('data-bill-id');
 			const choice = btn.getAttribute('data-choice'); // "YEA" または "NAY"
 			const actionsArea = btn.closest('.post-actions');
 			btn.disabled = true;
@@ -117,6 +122,64 @@ document.addEventListener("DOMContentLoaded", function () {
 			}
 		});
 	});
+
+	// =====================
+	// Amendment Voteボタンの非同期処理
+	// =====================
+	document.querySelectorAll('.amendment-card').forEach(card => {
+		const yea = card.querySelector('.vote-button.yea');
+		const nay = card.querySelector('.vote-button.nay');
+
+		if (yea) yea.addEventListener('click', handleAmendmentVote);
+		if (nay) nay.addEventListener('click', handleAmendmentVote);
+	});
+
+	async function handleAmendmentVote(e) {
+		const btn = e.currentTarget;
+
+		// 自分の投稿なら通信させずにトーストを出して終了
+		if (btn.getAttribute('data-is-own') === 'true') {
+			showWarningToast('🏛️ 自身の提出修正案に「投票」することはできません');
+			return;
+		}
+
+		const amendmentId = btn.getAttribute('data-amendment-id');
+		const choice = btn.getAttribute('data-choice'); // "YEA"または"NAY"
+		const card = btn.closest('.amendment-card');
+		const actionsArea = btn.closest('.post-actions');
+		btn.disabled = true;
+
+		try {
+			const response = await fetch(`/api/amendments/${amendmentId}/vote`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ choice: choice })
+			});
+
+			if (response.ok) {
+				const result = await response.json(); // { myChoice, yeaCount, nayCaount }
+
+				const yeaBtn = actionsArea.querySelector('.vote-button.yea');
+				const nayBtn = actionsArea.querySelector('.vote-button.nay');
+
+				yeaBtn.querySelector('.vote-count').textContent = result.yeaCount;
+				nayBtn.querySelector('.vote-count').textContent = result.nayCount;
+
+				yeaBtn.classList.toggle('voted', result.myChoice === 'YEA');
+				nayBtn.classList.toggle('voted', result.myChoice === 'NAY');
+			
+			} else {
+
+				const message = await response.text();
+				showWarningToast(message || '投票に失敗しました');
+
+			}
+		} catch (error) {
+			console.error('Amendment Voteの非同期通信に失敗しました: ', error);
+		} finally {
+			btn.disabled = false;
+		}
+	}
 
 	// =====================
 	// 削除ボタンの処理

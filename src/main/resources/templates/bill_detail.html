@@ -141,7 +141,7 @@
 					</form>
 				</div>
 
-				<!-- 修正案の一覧表示 -->
+				<!-- 修正案の一覧表示（承認済み） -->
 				<div class="amendment-list">
 					<!-- 修正案が存在しない場合 -->
 					<div th:if="${#lists.isEmpty(amendments)}" class="empty-state-text">
@@ -174,6 +174,65 @@
 						<p class="amendment-item-body" th:text="${amendment.description}">
 							修正内容本文...
 						</p>
+
+						<!-- ここから投票ボタン -->
+						<div class="post-actions">
+							<div class="vote-group">
+								<button type="button" class="vote-button yea" th:data-amendment-id="${amendment.id}" data-choice="YEA"
+									th:data-is-own="${loginUser != null && amendment.user.id == loginUser.id}"
+									th:classappend="${amendment.myChoice != null && amendment.myChoice.name() == 'YEA'} ? 'voted' : ''">
+									<span class="vote-icon">👍</span>
+									<span class="vote-count" th:text="${amendment.yeaCount}">0</span>
+								</button>
+								<button type="button" class="vote-button nay" th:data-amendment-id="${amendment.id}" data-choice="NAY"
+									th:data-is-own="${loginUser != null && amendment.user.id == loginUser.id}"
+									th:classappend="${amendment.myChoice != null && amendment.myChoice.name() == 'NAY'} ? 'voted' : ''">
+									<span class="vote-icon">👎</span>
+									<span class="vote-count" th:text="${amendment.nayCount}">0</span>
+								</button>
+							</div>
+						</div>
+					</div>
+				</div>
+
+				<!-- 法案提出者専用: 「承認待ち」の修正案一覧 -->
+				<div th:if="${pendingAmendments != null && !#lists.isEmpty(pendingAmendments)}" class="pending-amendment-section">
+					<h4 class="pending-amendment-title">
+						⏳ 承認待ち修正案
+						<span class="amendment-badge" th:text="${#lists.size(pendingAmendments)}">0</span>
+					</h4>
+
+					<div class="pending-amendment-list">
+						<div th:each="amendment : ${pendingAmendments}" class="amendment-card glass-card pending">
+							<div class="amendment-card-header">
+								<span class="user-name">
+									<div class="user-avatar-area">
+										<div class="user-avatar">
+											<img th:if="${amendment.user != null && amendment.user.avatarUrl != null}" 
+												th:src="${amendment.user.avatarUrl}" alt="ユーザーアバター">
+											<span th:if="${amendment.user == null || amendment.user.avatarUrl == null}">👤</span>
+										</div>
+										<a th:href="@{/users/{id}(id=${amendment.user.id})}"
+											th:text="${amendment.user.name}"></a>
+									</div>
+								</span>
+								<span class="post-time"
+									th:text="${#temporals.format(amendment.createdAt, 'yyyy/MM/dd（E）HH:mm')}"></span>
+							</div>
+
+							<h4 class="amendment-item-title" th:text="${amendment.title}">修正案タイトル</h4>
+							<p class="amendment-item-body" th:text="${amendment.description}">修正内容本文...</p>
+
+							<!-- 法案提出者専用: 承認/却下ボタン -->
+							<div class="amendment-approval-actions">
+								<form th:action="@{/amendments/{id}/approve(id=${amendment.id})}" method="post" style="display: inline;">
+									<button type="submit" class="approve-btn">✅ 承認する</button>
+								</form>
+								<form th:action="@{/amendments/{id}/reject(id=${amendment.id})}" method="post" style="display: inline;">
+									<button type="submit" class="reject-btn" onclick="return confirm('この修正案を却下しますか？')">❌ 却下する</button>
+								</form>
+							</div>
+						</div>
 					</div>
 				</div>
 			</section>

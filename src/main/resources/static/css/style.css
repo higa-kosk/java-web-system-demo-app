@@ -1139,6 +1139,64 @@ form:has(.delete-btn) {
     font-weight: bold;
 }
 
+.amendment-approval-actions {
+	display: flex;
+	gap: 8px;
+	margin-top: 12px;
+	flex-wrap: wrap;
+}
+
+.amendment-approval-actions form {
+	flex: 1;
+	min-width: 120px;
+}
+
+.approve-btn,
+.reject-btn {
+	width: 100%;
+	padding: 10px 16px;
+	border: none;
+	border-radius: 6px;
+	font-weight: 600;
+	font-size: 14px;
+	cursor: pointer;
+	transition: all 0.3s ease;
+}
+
+/* 承認ボタン：緑系 */
+.approve-btn {
+	background-color: #4caf50;
+	color: white;
+}
+
+.approve-btn:hover {
+	background-color: #45a049;
+	transform: translateY(-2px);
+	box-shadow: 0 4px 8px rgba(76, 175, 80, 0.3);
+}
+
+.approve-btn:active {
+	transform: translateY(0);
+	box-shadow: 0 2px 4px rgba(76, 175, 80, 0.2);
+}
+
+/* 却下ボタン：赤系 */
+.reject-btn {
+	background-color: #f44336;
+	color: white;
+}
+
+.reject-btn:hover {
+	background-color: #da190b;
+	transform: translateY(-2px);
+	box-shadow: 0 4px 8px rgba(244, 67, 54, 0.3);
+}
+
+.reject-btn:active {
+	transform: translateY(0);
+	box-shadow: 0 2px 4px rgba(244, 67, 54, 0.2);
+}
+
 /* ボタン類 */
 .btn-outline-light {
     background: transparent;

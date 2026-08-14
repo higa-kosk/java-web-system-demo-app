@@ -280,6 +280,7 @@ public class BillController {
 		
 		// 「承認済み」の修正案一覧（誰でも見られる、投票対象の物）
 		List<Amendment> approvedAmendments = amendmentService.getApprovedAmendmentsByBillId(id);
+		billEngagementService.attachAmendmentEngagementInfo(approvedAmendments, currentUser);
 		model.addAttribute("amendments", approvedAmendments);
 
 		// 法案提出者にだけ「承認待ち」の修正案一覧を渡す
