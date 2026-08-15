@@ -5,20 +5,24 @@ import com.example.demo.model.Amendment;
 import com.example.demo.model.Amendment.AmendmentStatus;
 import com.example.demo.model.Bill;
 import com.example.demo.model.BillNotification;
-import com.example.demo.model.BillNotification.BillNotificationType;
-import com.example.demo.model.Tag;
-import com.example.demo.repository.BillRepository;
-import com.example.demo.repository.TagRepository;
 import com.example.demo.model.Comment;
+import com.example.demo.model.Tag;
 import com.example.demo.model.User;
+import com.example.demo.model.VoteChoice;
+import com.example.demo.repository.AmendmentRepository;
+import com.example.demo.repository.AmendmentVoteRepository;
 import com.example.demo.repository.BillRepository;
 import com.example.demo.repository.CommentRepository;
 import com.example.demo.repository.NotificationsRepository;
+import com.example.demo.repository.TagRepository;
 import com.example.demo.repository.UserRepository;
+import com.example.demo.repository.VoteRepository;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
@@ -28,8 +32,11 @@ import java.util.regex.Pattern;
 @RequiredArgsConstructor
 public class BillService {
 
+	private final AmendmentRepository amendmentRepository;
+	private final AmendmentVoteRepository amendmentVoteRepository;
 	private final BillRepository billRepository;
 	private final TagRepository tagRepository;
+	private final VoteRepository voteRepository;
 	private final CommentRepository commentRepository;
 	private final NotificationsRepository notificationsRepository;
 	private final UserRepository userRepository;
@@ -138,5 +145,90 @@ public class BillService {
 		} else {
 			billRepository.deleteById(bill.getId());
 		}
+	}
+
+	/**
+	 * 採決を実行する
+	 * - votingDeadlineが過ぎたか確認
+	 * - 賛成票 > 反対票か確認（50% +1）
+	 * - Bill.statusをPASSED/REJECTEDに変更
+	 * - votingCompletedAtをセット
+	 * - 修正案が可決した場合、原案をARCHIVEDに
+	 */
+	@Transactional
+	public void executeVoting(Long billId) {
+		Bill bill = billRepository.findById(billId)
+				.orElseThrow(() -> new IllegalArgumentException("法案が見つかりません: " + billId));
+		
+		// 1. votingDeadlineを確認
+		if (bill.getVotingDeadline() == null) {
+			throw new IllegalStateException("採決予定日時が設定されていません");
+		}
+
+		LocalDateTime now = LocalDateTime.now();
+		if (now.isBefore(bill.getVotingDeadline())) {
+			throw new IllegalStateException("まだ採決日時に達していません。採決予定日時: " + bill.getVotingDeadline());
+		}
+
+		// 2. Billへの投票数をカウント
+		long yeaCount = voteRepository.countByBillAndChoice(bill, VoteChoice.YEA);
+		long nayCount = voteRepository.countByBillAndChoice(bill, VoteChoice.NAY);
+		long totalVotes = yeaCount + nayCount;
+
+		// 3. 投票があったか確認（投票がない場合は否決扱い）
+		if (totalVotes == 0) {
+			bill.setStatus(Bill.BillStatus.REJECTED);
+			bill.setVotingCompletedAt(now);
+			billRepository.save(bill);
+			return;
+		}
+
+		// 4. 承認済み修正案を取得（最新順）
+		List<Amendment> approvedAmendments = amendmentRepository.findByBillIdAndStatusOrderByCreatedAtDesc(
+				bill.getId(), 
+				AmendmentStatus.APPROVED
+		);
+
+		Amendment passedAmendment = null;
+
+		// 5. 最新の修正案だけが投票対象
+		if (!approvedAmendments.isEmpty()) {
+			Amendment latestAmendment = approvedAmendments.get(0); // 最新の修正案
+
+			long amendmentYea = amendmentVoteRepository.countByAmendmentAndChoice(latestAmendment, VoteChoice.YEA);
+			long amendmentNay = amendmentVoteRepository.countByAmendmentAndChoice(latestAmendment, VoteChoice.NAY);
+			long amendmentTotal = amendmentYea + amendmentNay;
+
+			// 最新修正案の採決判定：賛成 > 反対
+			if (amendmentTotal > 0 && amendmentYea > amendmentNay) {
+				passedAmendment = latestAmendment;
+			}
+		}
+
+		// 6. ステータスを確定
+		if (passedAmendment != null) {
+			
+			// 最新修正案が可決 → 原案と過去の修正案をARCHIVEDに
+			bill.setStatus(Bill.BillStatus.ARCHIVED);
+
+			// 過去の修正案（最新より前の物）もARCHIVEDに
+			for (int i = 1; i < approvedAmendments.size(); i++) {
+				approvedAmendments.get(i).setStatus(AmendmentStatus.ARCHIVED);
+				amendmentRepository.save(approvedAmendments.get(i));
+			}
+		
+		} else if (yeaCount > nayCount) {
+
+			// 修正案がない、または最新修正案が否決 → 原案が可決
+			bill.setStatus(Bill.BillStatus.PASSED);
+		
+		} else {
+
+			// 原案が否決
+			bill.setStatus(Bill.BillStatus.REJECTED);
+		}
+
+		bill.setVotingCompletedAt(now);
+		billRepository.save(bill);
 	}
 }

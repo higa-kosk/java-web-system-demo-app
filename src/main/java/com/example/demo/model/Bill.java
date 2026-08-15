@@ -21,7 +21,8 @@ public class Bill {
     public enum BillStatus {
         UNDER_DELIBERATION("審議中"),
         PASSED("可決"),
-        REJECTED("否決");
+        REJECTED("否決"),
+        ARCHIVED("廃案"); // 修正案（Amendment）が可決した場合の原案
 
         private final String displayName;
 
@@ -94,6 +95,14 @@ public class Bill {
     )
     private Set<Tag> tags = new HashSet<>();
 
+    // 採決予定日時（提案者が設定）
+    @Column(name = "voting_deadline")
+    private LocalDateTime votingDeadline;
+
+    // 実際に採決が実行された日時
+    @Column(name = "voting_completed_at")
+    private LocalDateTime votingCompletedAt;
+    
     // 提出日時
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

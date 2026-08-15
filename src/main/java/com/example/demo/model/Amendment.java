@@ -15,7 +15,8 @@ public class Amendment {
 	public enum AmendmentStatus {
 		PENDING,	// 承認待ち（提出者以外が提案した場合の初期状態）
 		APPROVED,	// 承認済み（正式な修正案として審議・投票対象になる）
-		REJECTED	// 却下（提出者が非承認とした）
+		REJECTED,	// 却下（提出者が非承認とした）
+		ARCHIVED	// 取り下げられた
 	}
 	
 	@Id
